@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "check:webfetch": "node scripts/check-web-fetch-verbs.mjs",
     "verify:rls": "node scripts/verify-rls.mjs"
   },
   "dependencies": {

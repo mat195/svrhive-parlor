@@ -18,7 +18,7 @@ const TABLES = [
   'releases', 'tracks', 'mentions_ledger', 'metrics_snapshots', 'action_queue', 'drafts',
   'parlor_chats', 'parlor_messages',
   'site_visits', 'run_deltas', 'corpus_drafts', 'corpus_draft_versions',
-  'listing_wizards', 'listing_progress', 'brain_positions', 'silk_focus', 'silk_questions', 'mat_answers',
+  'listing_wizards', 'listing_progress', 'brain_positions', 'silk_focus', 'silk_questions', 'mat_answers', 'web_fetch_cache', 'web_fetches',
 ];
 
 let ok = true;

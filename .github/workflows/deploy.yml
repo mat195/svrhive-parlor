@@ -35,6 +35,9 @@ jobs:
       - name: Secret hygiene grep (no service/LLM key in bundle)
         run: npm run check:secrets
 
+      - name: web-fetch GET-only guard
+        run: npm run check:webfetch
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

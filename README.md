@@ -1,5 +1,12 @@
 # svrhive-parlor — the Parlor
 
+> ## Doctrine — web-fetch is research infrastructure
+> Silk's `web-fetch` reads **public data at scale so Mat doesn't paste it
+> manually.** Every research task that could hit public data must go through
+> web-fetch **first**. It is GET-only, allowlisted, cached (24h), rate-limited,
+> robots-aware, and **fully audited** (`web_fetches`) — every fetch is auditable,
+> always. Owner-only invocation; a CI guard blocks any non-GET verb in its source.
+
 > ## Doctrine — answers are teaching moments
 > Every answer Mat gives is a **teaching moment for Silk, not a row update.** The
 > system's job is to make sure Silk **retains, propagates, and gets smarter from
