@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import AuditCard from '../components/AuditCard';
 
 interface QueueItem {
   id: string;
@@ -51,7 +52,9 @@ export default function Queue() {
   return (
     <div className="stack">
       {items.map((it) => (
-        <div className="card queue" key={it.id}>
+        (it.payload as any)?.format === 'audit' && it.status === 'proposed'
+          ? <AuditCard key={it.id} item={it} onChange={load} />
+          : <div className="card queue" key={it.id}>
           <div className="row-head">
             <span className={STATUS_CLASS[it.status] ?? 'chip'}>{it.status}</span>
             <span className="muted small">{it.kind} · {String(it.created_at).slice(0, 10)}</span>

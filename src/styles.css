@@ -242,3 +242,20 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .qctx-thumb { width: 40px; height: 40px; border-radius: 6px; display: grid; place-items: center; background: rgba(201,169,97,0.12); color: var(--gold); flex: none; }
 .qctx-quote { margin: 0; border-left: 2px solid var(--gold); padding-left: 0.6rem; color: var(--ink); }
 .moment-label { font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
+
+/* Audit card (scannable decision surface) */
+.auditcard .audit-header { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); margin-bottom: 0.5rem; }
+.audit-summary { list-style: none; padding: 0; margin: 0 0 0.9rem; }
+.audit-summary li { font-size: 0.9rem; color: var(--silk-300, var(--ink)); padding: 0.15rem 0 0.15rem 1rem; position: relative; }
+.audit-summary li::before { content: '·'; position: absolute; left: 0.2rem; color: var(--gold); }
+.audit-cluster { margin: 0.7rem 0; }
+.audit-cluster-label { font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; }
+.audit-cluster-label.strategic { color: var(--gold); }
+.audit-items { list-style: none; padding: 0; margin: 0; }
+.audit-items li { font-size: 0.9rem; padding: 0.22rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.audit-more { background: none; border: none; color: var(--gold); cursor: pointer; font-size: 0.8rem; padding: 0.3rem 0; }
+.audit-actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+.audit-actions .btn { flex: 1; min-width: 7rem; }
+.audit-foot { display: flex; gap: 1rem; margin-top: 0.7rem; }
+.audit-foot .link { background: none; border: none; color: var(--muted); cursor: pointer; }
+.audit-raw { white-space: pre-wrap; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem; font-size: 0.75rem; margin-top: 0.6rem; max-height: 320px; overflow: auto; }
