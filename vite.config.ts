@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Custom subdomain root (hive.silkvelvetrecords.com) → base '/'.
+// Relative base so the bundle works BOTH at the custom-subdomain root
+// (hive.silkvelvetrecords.com) AND at the github.io/<repo>/ preview path.
 export default defineConfig({
-  base: '/',
+  base: './',
   plugins: [react()],
   build: { outDir: 'dist', sourcemap: false },
 });
