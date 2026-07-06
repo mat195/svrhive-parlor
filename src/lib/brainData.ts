@@ -13,7 +13,7 @@ export const identity: Node[] = [
   { key: 'identity-disambig', label: 'Not affiliated with Thundercat (Stephen Bruner)', confidence: 'verified' },
   { key: 'identity-location', label: 'Montréal, Québec, Canada', confidence: 'verified' },
   { key: 'identity-active-since', label: 'Active since — 2014', confidence: 'verified', note: 'Mat, Strip 2026-07-06' },
-  { key: 'identity-realname', label: 'Real-name policy — ?', confidence: 'unverified' },
+  { key: 'identity-realname', label: 'Real-name policy — Mathieu Carrier (DB legal-name only)', confidence: 'verified', note: 'Mat 2026-07-06 · never in public copy' },
   { key: 'identity-producer', label: 'previously mislabeled "producer"', confidence: 'superseded', note: 'Corrected to rapper/vocalist' },
 ];
 
@@ -40,8 +40,8 @@ export const collaborators: Node[] = [
   { key: 'collab-sunnie', label: 'Sunnie', confidence: 'verified', note: 'vocalist' },
   { key: 'collab-magi-merlin', label: 'Magi Merlin', confidence: 'verified', note: 'vocalist' },
   { key: 'collab-curtis-williams', label: 'Curtis Williams', confidence: 'verified', note: 'vocalist' },
-  { key: 'collab-frei', label: 'Frei', confidence: 'unverified', note: 'vocalist?' },
-  { key: 'collab-muffin', label: 'Muffin', confidence: 'unverified', note: 'vocalist?' },
+  { key: 'collab-frei', label: 'Frei', confidence: 'verified', note: 'producer (beat provenance — not a public feature)' },
+  { key: 'collab-muffin', label: 'Muffin', confidence: 'verified', note: 'producer (beat provenance — not a public feature)' },
   { key: 'collab-briley-bell', label: 'Briley Bell', confidence: 'unverified' },
   { key: 'collab-lawrence-bossong', label: 'Lawrence A. Bossong', confidence: 'unverified' },
 ];
@@ -51,7 +51,7 @@ export const platforms: Node[] = [
   { key: 'platform-apple', label: 'Apple Music', confidence: 'verified', url: 'https://music.apple.com/us/artist/lucius-p-thundercat/958381434' },
   { key: 'platform-deezer', label: 'Deezer', confidence: 'verified', url: 'https://www.deezer.com/en/artist/7367252' },
   { key: 'platform-tidal', label: 'TIDAL', confidence: 'verified', url: 'https://tidal.com/browse/artist/6441893' },
-  { key: 'platform-youtube', label: 'YouTube', confidence: 'unverified', note: 'official channel status TODO', url: 'https://www.youtube.com/channel/UCFLo4zgjKpAk1IZ4rCDdw5g' },
+  { key: 'platform-youtube', label: 'YouTube', confidence: 'verified', note: 'official channel — Mat-confirmed', url: 'https://www.youtube.com/channel/UCFLo4zgjKpAk1IZ4rCDdw5g' },
   { key: 'platform-bandcamp', label: 'Bandcamp', confidence: 'verified', url: 'https://luciuspthundercat.bandcamp.com' },
   { key: 'platform-website', label: 'Official website', confidence: 'verified', url: 'https://luciuspthundercat.com' },
   { key: 'platform-facebook', label: 'Facebook', confidence: 'verified', url: 'https://www.facebook.com/luciuspthundercat' },
