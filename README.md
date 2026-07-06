@@ -1,5 +1,12 @@
 # svrhive-parlor — the Parlor
 
+> ## Doctrine — answers are teaching moments
+> Every answer Mat gives is a **teaching moment for Silk, not a row update.** The
+> system's job is to make sure Silk **retains, propagates, and gets smarter from
+> every answer — automatically.** Each answer appends to `mat_answers`, triggers a
+> propagation cascade (`answer-propagate` → one review queue item + a journal
+> entry), and feeds the weekly Answer Digest ("what Mat taught me").
+
 > ## Doctrine — the work happens in the Parlor
 > Every SVRHIVE capability defaults to a **Parlor UI** unless there's a
 > compelling reason not to. Approval, publishing, editing, monitoring — all

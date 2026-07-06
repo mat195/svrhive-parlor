@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { callFn } from '../lib/api';
 import { useSilk } from '../SilkContext';
 
 interface Q {
@@ -82,7 +83,13 @@ export default function QuestionsPin() {
   if (!q) return null;
 
   async function submit() {
-    await supabase.from('silk_questions').update({ status: 'answered', answer, answered_at: new Date().toISOString() }).eq('id', q!.id);
+    // Propagation cascade: writes mat_answers, files the review queue item, journals.
+    // Falls back to a plain answer if the function is unreachable.
+    try {
+      await callFn('answer-propagate', { question_id: q!.id, answer });
+    } catch {
+      await supabase.from('silk_questions').update({ status: 'answered', answer, answered_at: new Date().toISOString() }).eq('id', q!.id);
+    }
     localStorage.removeItem(draftKey(q!.id));
     load(true);
   }
