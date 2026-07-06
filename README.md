@@ -84,12 +84,16 @@ bundle to enforce this (`npm run check:secrets`).
    top competitors, top cited domains, latest journal, latest metric snapshot.
 2. **Ledger** — tabbed browser (results / runs / journal / mentions / metrics),
    filters (category / engine / mentioned), recent-first, load-more.
-3. **Workshop** — two subtabs. **Drafts** = Corpus Foundry: Silk drafts corpus
+3. **Workshop** — three subtabs. **Drafts** = Corpus Foundry: Silk drafts corpus
    pages (or type a target query to generate one); each Draft Card has
    Preview / Edit / Details modes and Publish (3s confirm) / Reject / Regenerate;
    published cards show live URL + visits + citing-prompt count and a **Retract**
    button for 15 minutes. **Actions** = the `action_queue` (approve/reject records
-   the decision; never auto-executes).
+   the decision; never auto-executes). **Listings** = guided submission wizards
+   (MusicBrainz artist/label/releases, Wikidata artist/label) generated from the
+   entity master — order-enforced, per-field copy buttons + "open submission page"
+   links, resumable progress. A **Listing Sprint** readiness gate says "ready" only
+   once all five wizards are live. Regenerate wizards: `node scripts/gen_listing_wizards.mjs` (svrhive).
 4. **Silk** — streamed chat. Each reply shows a **sources** line listing the
    ledger rows/runs that informed it. Prefix `/deep` for the stronger model.
    Silk refuses to invent when the ledger lacks the answer (provenance applies).

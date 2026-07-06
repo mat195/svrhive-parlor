@@ -87,6 +87,17 @@ input, select { width: 100%; background: var(--velvet-950); color: var(--silk-10
 .modal .actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
 .modal .actions .btn { flex: 1; padding: 0.9rem; }
 
+/* Listing wizards */
+.sprint { text-align: left; } .sprint.ok { border-color: var(--ok); }
+.wizcard { display: block; width: 100%; text-align: left; cursor: pointer; color: inherit; }
+.wiz-num { font-family: var(--serif); font-size: 1rem; color: var(--silk-100); }
+.wiz-progress { height: 0.5rem; background: var(--velvet-800); border-radius: 6px; overflow: hidden; margin: 0.5rem 0 0.2rem; }
+.wiz-progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); }
+.wizstep.done { border-color: var(--ok); opacity: 0.75; }
+.wiz-value { display: flex; gap: 0.5rem; align-items: flex-start; margin-top: 0.4rem; }
+.wiz-value pre { flex: 1; white-space: pre-wrap; word-break: break-word; background: var(--velvet-950); border: 1px solid var(--velvet-line); border-radius: 8px; padding: 0.6rem 0.7rem; font-size: 0.9rem; margin: 0; }
+.copybtn { white-space: nowrap; }
+
 /* Chat */
 .chat { display: flex; flex-direction: column; height: 100%; }
 .messages { flex: 1; display: flex; flex-direction: column; gap: 0.8rem; }

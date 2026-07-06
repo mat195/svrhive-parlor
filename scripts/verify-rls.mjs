@@ -17,6 +17,8 @@ const TABLES = [
   'visibility_runs', 'visibility_results', 'silk_journal', 'entity_facts', 'link_graph',
   'releases', 'tracks', 'mentions_ledger', 'metrics_snapshots', 'action_queue', 'drafts',
   'parlor_chats', 'parlor_messages',
+  'site_visits', 'run_deltas', 'corpus_drafts', 'corpus_draft_versions',
+  'listing_wizards', 'listing_progress',
 ];
 
 let ok = true;
