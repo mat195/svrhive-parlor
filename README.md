@@ -7,6 +7,27 @@
 > propagation cascade (`answer-propagate` → one review queue item + a journal
 > entry), and feeds the weekly Answer Digest ("what Mat taught me").
 
+> ## Site Growth Doctrine
+> `silkvelvetrecords.com` stays **intentionally minimal** for the current phase. It
+> exists to serve **AI answer engines, Google/Bing indexing, and as the authority
+> reference URL for entity-database submissions.** Human-facing UX polish is
+> deprioritized until **Watchtower data** shows what humans actually do when they
+> arrive.
+>
+> **Grows continuously:** Notes (Foundry corpus pages targeting winnable queries) ·
+> Release pages when new music drops · Facts/schema updates via entity-master
+> corrections.
+>
+> **Waits until evidence justifies it:** press/reviews section · music-player
+> embeds beyond simple links · merch/store integration · Bandcamp/beat-store
+> layouts · multi-artist roster designs.
+>
+> **Anytime aesthetics call:** typography swap (when PP Editorial New arrives) ·
+> palette + motion refinements · icon and mark work.
+>
+> **Silk never proposes site-expansion features unprompted** — corpus pages, yes;
+> new sections, no, until Mat green-lights.
+
 > ## Doctrine — the work happens in the Parlor
 > Every SVRHIVE capability defaults to a **Parlor UI** unless there's a
 > compelling reason not to. Approval, publishing, editing, monitoring — all
