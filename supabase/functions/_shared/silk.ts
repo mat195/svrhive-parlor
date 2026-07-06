@@ -27,6 +27,12 @@ export async function loadIdentity(): Promise<{ identity: string; hash: string }
   return { identity, hash };
 }
 
+/** Load any runtime-synced config blob (entity_master, distill_doctrine, …). */
+export async function loadConfig(key: string): Promise<{ value: string; hash: string }> {
+  const { data } = await admin.from('silk_config').select('value, hash').eq('key', key).maybeSingle();
+  return { value: data?.value ?? '', hash: data?.hash ?? 'missing' };
+}
+
 export interface WriteProof { ok: boolean; table: string; found: number; detail: string; }
 
 /**

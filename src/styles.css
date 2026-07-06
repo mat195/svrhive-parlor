@@ -126,6 +126,24 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 @keyframes qstrip-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 @keyframes qstrip-out { to { opacity: 0; transform: translateX(14px); } }
 
+/* Conversation Distiller — extractions review card (Brief Six) */
+.xstrip .xstrip-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #b98bd6; box-shadow: 0 0 8px rgba(185,139,214,0.6); }
+.xstrip-list { list-style: none; margin: 0; padding: 0; }
+.xstrip-list li { padding: 0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.xstrip-list li.deselected { opacity: 0.45; }
+.xstrip-head { display: flex; align-items: center; gap: 0.45rem; cursor: pointer; }
+.xstrip-badge { font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.08rem 0.4rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); color: var(--muted); }
+.x-fact { color: #a8d8b0; border-color: rgba(168,216,176,0.4); }
+.x-preference, .x-correction { color: #b98bd6; border-color: rgba(185,139,214,0.4); }
+.x-instinct, .x-question { color: var(--gold); border-color: rgba(201,169,97,0.4); }
+.xstrip-summary { font-size: 0.86rem; margin: 0.3rem 0 0.2rem; }
+.xstrip-supersede { font-size: 0.8rem; margin: 0.2rem 0; }
+.x-old { text-decoration: line-through; color: var(--muted); } .x-new { color: #a8d8b0; }
+.xstrip-canon { width: 100%; margin-top: 0.3rem; font-size: 0.82rem; }
+.xstrip-quote { font-size: 0.76rem; color: var(--muted); font-style: italic; margin-top: 0.3rem; }
+.xstrip-acts { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap; }
+.xstrip-acts .link { background: none; border: none; color: var(--gold); cursor: pointer; }
+
 /* ============================ BRIEF (studio) ============================ */
 .brief-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .score-big { font-family: var(--serif); font-size: clamp(3.5rem, 12vw, 5.5rem); line-height: 0.9; color: var(--gold); font-variant-numeric: tabular-nums; }
@@ -285,6 +303,8 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .dot-thinking { background: var(--gold); animation: presence-pulse 2s var(--ease) infinite; }
 .dot-working { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
 .dot-reporting { background: var(--accent-soft); box-shadow: 0 0 10px var(--gold); }
+.dot-distilling { background: #b98bd6; box-shadow: 0 0 9px rgba(185,139,214,0.7); animation: presence-pulse 1.6s var(--ease) infinite; }
+.presence-distilling { background: rgba(185,139,214,0.07); }
 .presence-state { text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.6rem; color: var(--gold); flex: none; }
 .presence-label { color: var(--muted); font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .presence-drawer { position: absolute; top: 28px; left: 0; right: 0; z-index: 30; background: var(--bg-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 0 0 10px 10px; padding: 0.7rem 0.9rem; font-size: 0.85rem; }

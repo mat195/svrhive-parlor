@@ -44,7 +44,7 @@ export default function PresenceBar() {
   const reportingFlash = server && server.done_at && server.state === 'reporting' && Date.now() - Date.parse(server.done_at) < 1800 ? server : null;
 
   let state: string, label: string, sub: string | null = null, working: Status | null = null;
-  if (serverActive && (serverActive.state === 'working' || serverActive.state === 'thinking')) {
+  if (serverActive && (serverActive.state === 'working' || serverActive.state === 'thinking' || serverActive.state === 'distilling')) {
     state = serverActive.state; label = serverActive.label ?? serverActive.state; sub = serverActive.sublabel; working = serverActive;
   } else if (reportingFlash) {
     state = 'reporting'; label = 'just posted an update';
