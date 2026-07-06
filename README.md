@@ -1,5 +1,12 @@
 # svrhive-parlor — the Parlor
 
+> ## Doctrine — Silk's chat is one continuous conversation
+> Silk's chat is **one continuous conversation across the entire Parlor
+> experience.** State persists through navigation, session end, and browser
+> restart (hoisted to `SilkProvider`, backed by `parlor_chats`/`parlor_messages`,
+> active chat pinned in localStorage). **Only Mat explicitly starting a New chat
+> resets it.**
+
 > ## Doctrine — web-fetch is research infrastructure
 > Silk's `web-fetch` reads **public data at scale so Mat doesn't paste it
 > manually.** Every research task that could hit public data must go through
