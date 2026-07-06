@@ -12,6 +12,7 @@ interface RunRow {
     artists?: Counted[];
     domains?: Counted[];
     byCategory?: Record<string, { total: number; mentioned: number }>;
+    whatChanged?: string[];
   };
 }
 
@@ -51,8 +52,17 @@ export default function MorningBrief() {
   const domains = latest.summary?.domains ?? [];
   const maxCat = Math.max(1, ...Object.values(cats).map((c) => c.total));
 
+  const whatChanged = latest.summary?.whatChanged ?? [];
+
   return (
     <div className="stack">
+      {whatChanged.length > 0 && (
+        <section className="card whatchanged">
+          <h2 style={{ marginTop: 0 }}>What changed</h2>
+          <ul className="journal">{whatChanged.map((c, i) => <li key={i}>{c}</li>)}</ul>
+        </section>
+      )}
+
       <section className="hero">
         <div className="score">{latest.mentions_total}<span className="of">/{latest.prompt_count}</span></div>
         <div className="scoremeta">

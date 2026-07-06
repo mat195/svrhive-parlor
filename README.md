@@ -26,7 +26,32 @@ This authorizes Silk to commit to the **`svrhive-site`** repo **only** when Mat
 clicks **Publish** or **Retract** in the Parlor UI (via the `foundry-publish` /
 `foundry-retract` Edge Functions). No other repo, no other action, **no
 unattended writes**. Every other automation door stays closed. The commit is
-Mat's decision executed by Silk's hands.
+Mat's decision executed by Silk's hands. It's enforced in code: the publish/
+retract functions refuse unless `AUTOPILOT_ALLOWLIST` (a function secret)
+contains that exact entry.
+
+## Corpus Foundry — GitHub token setup (Mat does this once)
+
+Publish/Retract commit corpus pages to `svrhive-site`. Until a token is set, the
+publish path is **stubbed** (functions return `{stubbed:true}`; nothing is
+committed) — everything else works. To enable it, create a token scoped to that
+one repo:
+
+- **Preferred — GitHub App:** github.com → Settings → Developer settings → GitHub
+  Apps → New. Repository permissions → **Contents: Read and write** (nothing
+  else). Install on **only `mat195/svrhive-site`**. Use its installation token.
+- **Fallback — fine-grained PAT:** Settings → Developer settings → Fine-grained
+  tokens → Repository access: **only `mat195/svrhive-site`** → Permissions →
+  **Contents: Read and write** only → generate.
+
+Hand the token to the builder (or run it yourself):
+
+```bash
+supabase secrets set GITHUB_TOKEN=<token> --project-ref fitpvesrrirezbndkelo
+```
+
+The token lives **only** as a Supabase Edge Function secret — never in a repo or
+the frontend bundle (CI greps for it).
 
 **Live now (preview):** https://mat195.github.io/svrhive-parlor/ — sign in with
 the owner email's magic link. Moves to `hive.silkvelvetrecords.com` once DNS +
@@ -59,13 +84,18 @@ bundle to enforce this (`npm run check:secrets`).
    top competitors, top cited domains, latest journal, latest metric snapshot.
 2. **Ledger** — tabbed browser (results / runs / journal / mentions / metrics),
    filters (category / engine / mentioned), recent-first, load-more.
-3. **Queue** — `action_queue` items with status chips + Silk's rationale +
-   attached `drafts`. Approve/Reject writes status + timestamp + optional note.
-   **Approving records the decision; it does NOT execute anything** (execution is
-   the Corpus Foundry brief).
+3. **Workshop** — two subtabs. **Drafts** = Corpus Foundry: Silk drafts corpus
+   pages (or type a target query to generate one); each Draft Card has
+   Preview / Edit / Details modes and Publish (3s confirm) / Reject / Regenerate;
+   published cards show live URL + visits + citing-prompt count and a **Retract**
+   button for 15 minutes. **Actions** = the `action_queue` (approve/reject records
+   the decision; never auto-executes).
 4. **Silk** — streamed chat. Each reply shows a **sources** line listing the
    ledger rows/runs that informed it. Prefix `/deep` for the stronger model.
    Silk refuses to invent when the ledger lacks the answer (provenance applies).
+5. **Watchtower** — Referrer Watch: today/7d/30d visit counters, referrer
+   breakdown (AI referrers pinned), live feed, and the permanent **first-AI-visitor
+   trophy**. Discord pings on the first AI referrer of each day.
 
 ## Security model
 

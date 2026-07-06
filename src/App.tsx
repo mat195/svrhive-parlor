@@ -4,15 +4,15 @@ import { supabase, OWNER_EMAIL } from './lib/supabase';
 import SignIn from './components/SignIn';
 import MorningBrief from './views/MorningBrief';
 import Ledger from './views/Ledger';
-import Queue from './views/Queue';
+import Workshop from './views/Workshop';
 import Silk from './views/Silk';
 import Watchtower from './views/Watchtower';
 
-type View = 'brief' | 'ledger' | 'queue' | 'silk' | 'watchtower';
+type View = 'brief' | 'ledger' | 'workshop' | 'silk' | 'watchtower';
 const TABS: { id: View; label: string }[] = [
   { id: 'brief', label: 'Brief' },
   { id: 'ledger', label: 'Ledger' },
-  { id: 'queue', label: 'Queue' },
+  { id: 'workshop', label: 'Workshop' },
   { id: 'silk', label: 'Silk' },
   { id: 'watchtower', label: 'Watch' },
 ];
@@ -48,7 +48,7 @@ export default function App() {
       <main className="viewport">
         {view === 'brief' && <MorningBrief />}
         {view === 'ledger' && <Ledger />}
-        {view === 'queue' && <Queue />}
+        {view === 'workshop' && <Workshop />}
         {view === 'silk' && <Silk />}
         {view === 'watchtower' && <Watchtower />}
       </main>

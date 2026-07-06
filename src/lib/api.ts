@@ -6,6 +6,22 @@ export interface LedgerRef {
   label: string;
 }
 
+/** Call a Supabase Edge Function with the owner's session token. Returns the
+ *  JSON body; throws on error unless the function returned a {stubbed:true}. */
+export async function callFn(name: string, body: unknown): Promise<any> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('not signed in');
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok && !json.stubbed) throw new Error(json.error || `${name} ${res.status}`);
+  return json;
+}
+
 /** Stream a Silk reply from the silk-chat Edge Function. Parses the SSE events
  *  (refs / delta / done). Returns the final refs + full text. */
 export async function streamSilkChat(opts: {
