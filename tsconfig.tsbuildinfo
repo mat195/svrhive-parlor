@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/signin.tsx","./src/lib/api.ts","./src/lib/supabase.ts","./src/views/ledger.tsx","./src/views/morningbrief.tsx","./src/views/queue.tsx","./src/views/silk.tsx"],"version":"5.9.3"}
