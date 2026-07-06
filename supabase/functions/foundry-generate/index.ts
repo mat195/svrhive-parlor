@@ -3,6 +3,7 @@
 // publishes. Owner-only.
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { startStatus, endStatus } from '../_shared/status.ts';
+import { loadIdentity, verifyWrite } from '../_shared/silk.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -44,7 +45,9 @@ Deno.serve(async (req) => {
   }
 
   // Ask Claude for the page (body only; we build frontmatter).
-  const system = SPEC + '\nOutput ONLY minified JSON, no prose, no code fences.';
+  // SILK_IDENTITY.md (current, runtime-loaded) is the FIRST system block on every Silk call.
+  const { identity, hash: identityHash } = await loadIdentity();
+  const system = identity + '\n\n--- CORPUS PAGE SPEC ---\n' + SPEC + '\nOutput ONLY minified JSON, no prose, no code fences.';
   const user =
     `Target query: "${targetQuery}".\nCompetitor URLs currently winning this space: ${competitorUrls.join(', ') || 'none found in ledger'}.\n` +
     'Produce JSON: {"title":string (<=70 chars, the question as a title),"description":string (<=160 chars, the direct answer),"body_markdown":string (the full page body in markdown: H1 as the question, direct answer first, a table if useful, short sections; NO frontmatter),"silk_explains":string (one sentence, Silk voice, why publishing this helps),"rationale":string (2-3 sentences: which query, who wins it now, expected outcome)}';
@@ -93,6 +96,10 @@ Deno.serve(async (req) => {
   }).select('*').single();
   if (error) { await endStatus(statusId, false); return json({ error: error.message }, 500); }
 
+  // Voice-not-hands: confirm the draft actually landed before reporting done.
+  const proof = await verifyWrite('corpus_drafts', { id: draft.id });
+  if (!proof.ok) { await endStatus(statusId, false); return json({ error: 'draft insert unverified: ' + proof.detail }, 500); }
+
   await endStatus(statusId, true);
-  return json({ ok: true, draft });
+  return json({ ok: true, draft, identity_hash: identityHash, write_proof: proof.detail });
 });

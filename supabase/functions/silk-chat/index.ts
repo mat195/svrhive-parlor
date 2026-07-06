@@ -11,7 +11,7 @@
 //                         event: delta → {text}   (repeated)
 //                         event: done  → {ok:true}
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SILK_IDENTITY } from './identity.ts';
+import { loadIdentity } from '../_shared/silk.ts';
 
 const OWNER_EMAIL = 'matc195@gmail.com';
 const CHEAP_MODEL = 'claude-haiku-4-5-20251001';
@@ -45,10 +45,6 @@ const CORS = {
 const enc = new TextEncoder();
 function sse(controller: ReadableStreamDefaultController, event: string, data: unknown) {
   controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-}
-
-function loadIdentity(): string {
-  return SILK_IDENTITY;
 }
 
 function keywords(q: string): string[] {
@@ -135,7 +131,7 @@ Deno.serve(async (req) => {
   const message = rawMessage.replace(/^\/deep\b\s*/i, '');
   const model = deep ? DEEP_MODEL : CHEAP_MODEL;
 
-  const identity = loadIdentity();
+  const { identity, hash: identityHash } = await loadIdentity();
   const { ctx, refs } = await gatherContext(message);
 
   const system =
@@ -148,7 +144,7 @@ Deno.serve(async (req) => {
 
   const stream = new ReadableStream({
     async start(controller) {
-      sse(controller, 'refs', { ledger_refs: refs, model });
+      sse(controller, 'refs', { ledger_refs: refs, model, identity_hash: identityHash });
       let full = '';
       try {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -204,7 +200,7 @@ Deno.serve(async (req) => {
           ledger_refs: refs,
         });
       }
-      sse(controller, 'done', { ok: true });
+      sse(controller, 'done', { ok: true, identity_hash: identityHash });
       controller.close();
     },
   });

@@ -107,10 +107,24 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .sources { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; }
 .silk-hint { text-align: center; color: var(--muted); font-size: 0.86rem; padding: 1.5rem 0.5rem; }
 
-/* Silk's Questions pin */
-.qpin { display: flex; align-items: center; gap: 0.7rem; border: 1px solid rgba(201,169,97,0.25); background: rgba(201,169,97,0.06); border-radius: 12px; padding: 0.7rem 0.9rem; margin-bottom: 1rem; }
-.qpin .q { flex: 1; font-size: 0.9rem; } .qpin .qctx { color: var(--muted); font-size: 0.75rem; }
-.qpin .qacts { display: flex; gap: 0.4rem; }
+/* Silk's Questions Strip (in the Silk column, between Presence Bar + chat) */
+.qstrip { flex: none; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.qstrip-bar { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.5rem 0.9rem; background: none; border: none; color: var(--ink); cursor: pointer; font-family: var(--sans); font-size: 0.82rem; text-align: left; }
+.qstrip-bar:disabled { cursor: default; }
+.qstrip-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--gold); box-shadow: 0 0 8px rgba(201,169,97,0.7); animation: presence-pulse 2.4s var(--ease) infinite; }
+.qstrip-dot.empty { background: var(--muted); opacity: 0.4; box-shadow: none; animation: none; }
+.qstrip-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qstrip-chev { color: var(--muted); font-size: 0.7rem; flex: none; }
+.qstrip-card { padding: 0.75rem 0.9rem 0.9rem; background: rgba(201,169,97,0.05); border-bottom: 1px solid rgba(255,255,255,0.06); animation: qstrip-in 0.22s var(--ease); }
+.qstrip-card.leaving { animation: qstrip-out 0.22s var(--ease) forwards; }
+.qstrip-card .qacts { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.qstrip-seeall { display: block; margin-top: 0.6rem; background: none; border: none; color: var(--gold); cursor: pointer; padding: 0; }
+.qstrip-list { list-style: none; margin: 0; padding: 0; }
+.qstrip-list li button { display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--ink); padding: 0.5rem 0.2rem; cursor: pointer; font-size: 0.86rem; }
+.qstrip-list li button:hover { background: rgba(255,255,255,0.03); }
+.qstrip-urg { font-size: 0.68rem; color: var(--gold); border: 1px solid rgba(201,169,97,0.3); border-radius: 999px; padding: 0.05rem 0.4rem; flex: none; }
+@keyframes qstrip-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes qstrip-out { to { opacity: 0; transform: translateX(14px); } }
 
 /* ============================ BRIEF (studio) ============================ */
 .brief-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }

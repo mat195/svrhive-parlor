@@ -4,6 +4,7 @@
 //  3. file ONE queue item ("review N surfaces") + a journal entry in Silk's voice,
 //  4. link the journal back to the answer. Owner-only.
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
+import { verifyWrite } from '../_shared/silk.ts';
 
 // Map a question's node_key → (entity-master field, downstream surfaces).
 function cascade(nodeKey: string): { field: string; surfaces: string[] } {
@@ -55,5 +56,12 @@ Deno.serve(async (req) => {
     },
   });
 
-  return json({ ok: true, field, surfaces, journal_ref: jr?.id });
+  // Voice-not-hands: confirm the two state changes landed before reporting done.
+  const qProof = await verifyWrite('silk_questions', { id: q.id, status: 'answered' });
+  const aProof = ans?.id ? await verifyWrite('mat_answers', { id: ans.id }) : { ok: false, detail: 'mat_answers insert returned no id' };
+  if (!qProof.ok || !aProof.ok) {
+    return json({ error: 'propagation unverified', question_proof: qProof.detail, answer_proof: aProof.detail }, 500);
+  }
+
+  return json({ ok: true, field, surfaces, journal_ref: jr?.id, write_proof: [qProof.detail, aProof.detail] });
 });
