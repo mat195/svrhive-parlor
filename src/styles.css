@@ -222,3 +222,11 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .wiz-value pre { flex: 1; white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem 0.7rem; font-size: 0.9rem; margin: 0; }
 .row-title { font-size: 0.92rem; } .row-ex { font-size: 0.82rem; margin-top: 0.3rem; }
 .rank { list-style: none; padding: 0; margin: 0; } .rank li { display: flex; justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9rem; }
+
+/* Brain graph (cytoscape) */
+.braingraph-wrap { position: relative; }
+.braingraph { height: 460px; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; background: radial-gradient(circle at 50% 45%, rgba(46,26,52,0.45), transparent 72%); touch-action: none; }
+.graph-tip { position: absolute; background: var(--bg-2); border: 1px solid var(--gold); border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.78rem; pointer-events: none; z-index: 20; max-width: 220px; color: var(--ink); }
+.sr-nodelist { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+.sr-nodelist button:focus { position: fixed; top: 8px; left: 8px; width: auto; height: auto; clip: auto; background: var(--bg-2); color: var(--ink); padding: 0.4rem 0.7rem; border: 1px solid var(--gold); border-radius: 8px; z-index: 200; }
+@media (max-width: 860px) { .braingraph { height: 360px; } }
