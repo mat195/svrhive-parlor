@@ -1,8 +1,32 @@
 # svrhive-parlor — the Parlor
 
+> ## Doctrine — the work happens in the Parlor
+> Every SVRHIVE capability defaults to a **Parlor UI** unless there's a
+> compelling reason not to. Approval, publishing, editing, monitoring — all
+> inside `hive.silkvelvetrecords.com`. No context-switching to GitHub, DNS
+> panels, or other tools unless genuinely unavoidable. This is a **design
+> constraint**, not a nice-to-have. Silk is the hands; Mat is the will — Silk
+> never acts unilaterally, and a Mat click IS the human action.
+
 Mat's private command room for SVRHIVE / Silk V1. Login-gated on his own domain
 (`hive.silkvelvetrecords.com`). Reads Silk's morning brief, browses the ledger,
-approves/rejects queue items, and chats with Silk — grounded in ledger data.
+approves/rejects queue items, publishes corpus pages, watches for AI referrers,
+and chats with Silk — grounded in ledger data.
+
+## Automation boundary — `AUTOPILOT_ALLOWLIST`
+
+Default: **empty** (Silk is read-only to the outside world; `OUTREACH_ENABLED`
+false). Brief Three opens exactly **one** scoped door:
+
+```
+AUTOPILOT_ALLOWLIST = ["github:svrhive-site:commit-on-approval"]
+```
+
+This authorizes Silk to commit to the **`svrhive-site`** repo **only** when Mat
+clicks **Publish** or **Retract** in the Parlor UI (via the `foundry-publish` /
+`foundry-retract` Edge Functions). No other repo, no other action, **no
+unattended writes**. Every other automation door stays closed. The commit is
+Mat's decision executed by Silk's hands.
 
 **Live now (preview):** https://mat195.github.io/svrhive-parlor/ — sign in with
 the owner email's magic link. Moves to `hive.silkvelvetrecords.com` once DNS +

@@ -78,3 +78,14 @@ input, select { width: 100%; background: var(--velvet-950); color: var(--silk-10
 .sources { font-size: 0.72rem; color: var(--silk-muted); margin-top: 0.3rem; }
 .composer { display: flex; gap: 0.5rem; padding-top: 0.8rem; position: sticky; bottom: 0; background: var(--velvet-950); }
 .composer input { margin: 0; }
+
+/* Watchtower */
+.counts3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+.count-card { border: 1px solid var(--velvet-line); border-radius: 12px; padding: 0.9rem; text-align: center; background: linear-gradient(180deg, var(--velvet-850), var(--velvet-900)); }
+.count-n { font-family: var(--serif); font-size: 2rem; color: var(--accent); line-height: 1; }
+.trophy { text-align: center; }
+.trophy.won { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, 0 0 24px rgba(217,185,140,0.15); }
+.trophy-badge { font-family: var(--serif); letter-spacing: 0.08em; color: var(--accent); font-size: 1.1rem; margin-bottom: 0.4rem; }
+.trophy-meta { font-size: 0.95rem; }
+.feed-row { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; }
+.feed-path { font-size: 0.9rem; }

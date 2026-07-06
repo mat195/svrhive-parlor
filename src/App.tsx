@@ -6,13 +6,15 @@ import MorningBrief from './views/MorningBrief';
 import Ledger from './views/Ledger';
 import Queue from './views/Queue';
 import Silk from './views/Silk';
+import Watchtower from './views/Watchtower';
 
-type View = 'brief' | 'ledger' | 'queue' | 'silk';
+type View = 'brief' | 'ledger' | 'queue' | 'silk' | 'watchtower';
 const TABS: { id: View; label: string }[] = [
   { id: 'brief', label: 'Brief' },
   { id: 'ledger', label: 'Ledger' },
   { id: 'queue', label: 'Queue' },
   { id: 'silk', label: 'Silk' },
+  { id: 'watchtower', label: 'Watch' },
 ];
 
 export default function App() {
@@ -48,6 +50,7 @@ export default function App() {
         {view === 'ledger' && <Ledger />}
         {view === 'queue' && <Queue />}
         {view === 'silk' && <Silk />}
+        {view === 'watchtower' && <Watchtower />}
       </main>
 
       <nav className="tabbar" aria-label="Views">
