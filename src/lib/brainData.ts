@@ -12,7 +12,7 @@ export const identity: Node[] = [
   { key: 'identity-bio', label: 'Bio (100w) — approved & live', confidence: 'verified' },
   { key: 'identity-disambig', label: 'Not affiliated with Thundercat (Stephen Bruner)', confidence: 'verified' },
   { key: 'identity-location', label: 'Montréal, Québec, Canada', confidence: 'verified' },
-  { key: 'identity-active-since', label: 'Active since — ?', confidence: 'unverified', note: 'TODO(Mat)' },
+  { key: 'identity-active-since', label: 'Active since — 2014', confidence: 'verified', note: 'Mat, Strip 2026-07-06' },
   { key: 'identity-realname', label: 'Real-name policy — ?', confidence: 'unverified' },
   { key: 'identity-producer', label: 'previously mislabeled "producer"', confidence: 'superseded', note: 'Corrected to rapper/vocalist' },
 ];
