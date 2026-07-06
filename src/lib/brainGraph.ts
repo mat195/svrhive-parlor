@@ -30,7 +30,7 @@ export function buildElements(live: LiveData): Elem[] {
   D.catalog.forEach((n) => add(n.key, n.label.split(' (')[0], 2, { confidence: n.confidence, kind: 'release', note: n.label, vis: visFor(n.label, live.artists), corr: 1, cov: live.covered.has(n.key) ? 1 : 0 }));
   D.collaborators.forEach((n) => add(n.key, n.label, 3, { confidence: n.confidence, kind: 'collab', note: n.note, vis: visFor(n.label, live.artists), corr: n.confidence === 'verified' ? 1 : 0, cov: live.covered.has(n.key) ? 1 : 0 }));
   D.platforms.forEach((n) => add(n.key, n.label, 4, { confidence: n.confidence, kind: 'platform', note: n.note, missing: !!n.missing, url: n.url, vis: 0, corr: n.url ? 2 : 0, cov: 0 }));
-  D.referenceRappers.forEach((r) => add('ref-' + r.toLowerCase().replace(/[^a-z0-9]+/g, '-'), r, 5, { confidence: 'verified', kind: 'reference', vis: visFor(r, live.artists), corr: 1, cov: 0 }));
+  add('disc-probes', 'similarity probes (instrument)', 5, { confidence: 'unverified', kind: 'discovery', note: 'reference artists live in prompts.json, not identity', vis: 0, corr: 0, cov: 0 });
   add('disc-corpus', 'corpus pages', 5, { confidence: 'unverified', kind: 'discovery', vis: 0, corr: 0, cov: live.covered.size });
   add('disc-airef', 'AI referrals', 5, { confidence: 'unverified', kind: 'discovery', vis: 0, corr: 0, cov: 0 });
   [['tl-corrected', 'identity corrected'], ['tl-site', 'site live'], ['tl-bio', 'bio published'], ['tl-firstai', 'first AI visit (pending)']]

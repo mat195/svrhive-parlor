@@ -62,7 +62,7 @@ export const platforms: Node[] = [
   { key: 'platform-genius', label: 'Genius', confidence: 'unverified', missing: true },
 ];
 
-export const referenceRappers = ['Larry June', "Curren$y", 'Wiki', 'MIKE'];
+export const referenceRappers: string[] = []; // probe instrument lives in prompts.json, not identity
 
 export const RINGS = [
   { key: 'identity', label: 'Identity' },

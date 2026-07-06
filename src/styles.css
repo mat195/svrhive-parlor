@@ -230,3 +230,15 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .sr-nodelist { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 .sr-nodelist button:focus { position: fixed; top: 8px; left: 8px; width: auto; height: auto; clip: auto; background: var(--bg-2); color: var(--ink); padding: 0.4rem 0.7rem; border: 1px solid var(--gold); border-radius: 8px; z-index: 200; }
 @media (max-width: 860px) { .braingraph { height: 360px; } }
+
+/* Questions card context + moment labels */
+.qhead { display: flex; align-items: flex-start; gap: 0.4rem; }
+.q-text { flex: 1; font-size: 0.92rem; }
+.q-info { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.9rem; padding: 0; }
+.qwhy { color: var(--bone); font-size: 0.82rem; font-style: italic; margin-top: 0.3rem; }
+.qsrc { margin-top: 0.4rem; font-family: ui-monospace, monospace; }
+.qctx-card { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; padding: 0.5rem 0.7rem; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; background: rgba(0,0,0,0.2); font-size: 0.85rem; }
+.qctx-url { word-break: break-all; }
+.qctx-thumb { width: 40px; height: 40px; border-radius: 6px; display: grid; place-items: center; background: rgba(201,169,97,0.12); color: var(--gold); flex: none; }
+.qctx-quote { margin: 0; border-left: 2px solid var(--gold); padding-left: 0.6rem; color: var(--ink); }
+.moment-label { font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
