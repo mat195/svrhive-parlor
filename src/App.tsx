@@ -1,70 +1,129 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, OWNER_EMAIL } from './lib/supabase';
+import { SilkProvider, useSilk, type Room } from './SilkContext';
 import SignIn from './components/SignIn';
-import MorningBrief from './views/MorningBrief';
+import SilkPanel from './components/SilkPanel';
+import QuestionsPin from './components/QuestionsPin';
+import { Spider, Wordmark } from './components/Marks';
+import Brief from './views/Brief';
 import Ledger from './views/Ledger';
+import Brain from './views/Brain';
 import Workshop from './views/Workshop';
-import Silk from './views/Silk';
 import Watchtower from './views/Watchtower';
+import Archive from './views/Archive';
 
-type View = 'brief' | 'ledger' | 'workshop' | 'silk' | 'watchtower';
-const TABS: { id: View; label: string }[] = [
+const ROOMS: { id: Room; label: string }[] = [
   { id: 'brief', label: 'Brief' },
   { id: 'ledger', label: 'Ledger' },
+  { id: 'brain', label: 'Brain' },
   { id: 'workshop', label: 'Workshop' },
-  { id: 'silk', label: 'Silk' },
   { id: 'watchtower', label: 'Watch' },
+  { id: 'archive', label: 'Archive' },
 ];
+
+function parseHash(): { room?: Room; node?: string } {
+  const seg = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  if (!seg.length) return {};
+  const room = seg[0] as Room;
+  let node: string | undefined;
+  if (room === 'brain' && seg[1] === 'lpt' && seg[2]) {
+    const ring = seg[2], name = seg[3];
+    if (ring === 'collaborators' && name) node = 'collab-' + name;
+    else if (ring === 'platforms' && name) node = 'platform-' + name;
+    else if (ring === 'catalog' && name) node = 'rel-' + name;
+    else node = 'lpt';
+  } else if (room === 'brain' && seg[1]) node = seg[1];
+  return { room, node };
+}
+
+function RoomView({ room }: { room: Room }) {
+  switch (room) {
+    case 'brief': return <Brief />;
+    case 'ledger': return <Ledger />;
+    case 'brain': return <Brain />;
+    case 'workshop': return <Workshop />;
+    case 'watchtower': return <Watchtower />;
+    case 'archive': return <Archive />;
+  }
+}
+
+function HQ() {
+  const { room, setRoom, setFocusNode } = useSilk();
+  const [running, setRunning] = useState(false);
+  const [sheet, setSheet] = useState<'peek' | 'h66' | 'h100'>('peek');
+
+  // Deep-link on mount.
+  useEffect(() => {
+    const { room: r, node } = parseHash();
+    if (r && ROOMS.some((x) => x.id === r)) setRoom(r);
+    if (node) setFocusNode(node);
+    // presence: is a battery running (a run in the last ~4 min)?
+    supabase.from('visibility_runs').select('run_at').order('run_at', { ascending: false }).limit(1)
+      .then(({ data }) => { const t = data?.[0]?.run_at ? Date.parse(data[0].run_at) : 0; setRunning(Date.now() - t < 4 * 60 * 1000); });
+  }, []);
+
+  // Reflect brain navigation in the URL (shallow).
+  useEffect(() => { if (room === 'brain') history.replaceState(null, '', '#/brain'); }, [room]);
+
+  const presence = (
+    <span className="presence">{running ? <><span className="pulse" /> running</> : 'here'}</span>
+  );
+
+  return (
+    <div className="hq">
+      <aside className="rail">
+        <div className="brand"><Spider size={18} className="spider" /><Wordmark /></div>
+        <nav>
+          {ROOMS.map((r) => (
+            <button key={r.id} className={room === r.id ? 'roombtn active' : 'roombtn'} aria-current={room === r.id ? 'page' : undefined} onClick={() => setRoom(r.id)}>{r.label}</button>
+          ))}
+        </nav>
+        <div style={{ marginTop: 'auto', padding: '0.6rem' }}>
+          <button className="link" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.8rem' }} onClick={() => supabase.auth.signOut()}>sign out</button>
+        </div>
+      </aside>
+
+      <main className="canvas">
+        <div className="canvas-inner">
+          <QuestionsPin />
+          <RoomView room={room} />
+        </div>
+      </main>
+
+      <aside className="silkdock">
+        <header><Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}</header>
+        <SilkPanel variant="dock" />
+      </aside>
+
+      {/* Mobile */}
+      <div className={`silksheet ${sheet}`}>
+        <div className="grip" onClick={() => setSheet(sheet === 'peek' ? 'h66' : sheet === 'h66' ? 'h100' : 'peek')}>
+          <Spider size={14} className="spider" /> Silk {running && <span className="pulse" style={{ display: 'inline-block' }} />} <span className="muted">— tap to {sheet === 'peek' ? 'open' : 'close'}</span>
+        </div>
+        {sheet !== 'peek' && <SilkPanel variant="sheet" />}
+      </div>
+      <nav className="mobtabs" aria-label="Rooms">
+        {ROOMS.map((r) => (
+          <button key={r.id} className={room === r.id ? 'active' : ''} onClick={() => setRoom(r.id)}>{r.label}</button>
+        ))}
+      </nav>
+    </div>
+  );
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [view, setView] = useState<View>('brief');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
   if (!ready) return <div className="center muted">…</div>;
+  if (!session || session.user.email !== OWNER_EMAIL) return <SignIn wrongUser={!!session && session.user.email !== OWNER_EMAIL} />;
 
-  // Guard: only the owner email is allowed a session (defense-in-depth; RLS also enforces).
-  if (!session || session.user.email !== OWNER_EMAIL) {
-    return <SignIn wrongUser={!!session && session.user.email !== OWNER_EMAIL} />;
-  }
-
-  return (
-    <div className="app">
-      <header className="topbar">
-        <span className="brand">The Parlor</span>
-        <button className="link" onClick={() => supabase.auth.signOut()}>sign out</button>
-      </header>
-
-      <main className="viewport">
-        {view === 'brief' && <MorningBrief />}
-        {view === 'ledger' && <Ledger />}
-        {view === 'workshop' && <Workshop />}
-        {view === 'silk' && <Silk />}
-        {view === 'watchtower' && <Watchtower />}
-      </main>
-
-      <nav className="tabbar" aria-label="Views">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={view === t.id ? 'tab active' : 'tab'}
-            aria-current={view === t.id ? 'page' : undefined}
-            onClick={() => setView(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  );
+  return <SilkProvider><HQ /></SilkProvider>;
 }
