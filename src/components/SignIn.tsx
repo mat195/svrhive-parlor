@@ -12,7 +12,7 @@ export default function SignIn({ wrongUser }: { wrongUser?: boolean }) {
     setMsg('');
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
+      options: { shouldCreateUser: false, emailRedirectTo: window.location.href.split('#')[0] },
     });
     if (error) {
       // Signups are disabled; a non-allowlisted email fails here — cleanly.
