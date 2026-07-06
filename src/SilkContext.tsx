@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 
 export type Room = 'brief' | 'ledger' | 'brain' | 'workshop' | 'watchtower' | 'archive';
 
@@ -22,12 +22,16 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const [pointedNode, setPointedNode] = useState<string | null>(null);
   const [prefill, setPrefill] = useState('');
 
-  const pointAt = (n: string | null) => {
+  // Stable callbacks — unstable identities here caused consumers (QuestionsPin)
+  // to re-run their load() every provider render, wiping in-flight input.
+  const pointAt = useCallback((n: string | null) => {
     setPointedNode(n);
     if (n) setTimeout(() => setPointedNode((cur) => (cur === n ? null : cur)), 6500);
-  };
-  const askSilk = (text: string) => setPrefill(text);
-  const consumePrefill = () => { const p = prefill; setPrefill(''); return p; };
+  }, []);
+  const askSilk = useCallback((text: string) => setPrefill(text), []);
+  const prefillRef = useRef(prefill);
+  prefillRef.current = prefill;
+  const consumePrefill = useCallback(() => { const p = prefillRef.current; setPrefill(''); return p; }, []);
 
   return (
     <Ctx.Provider value={{ room, setRoom, focusNode, setFocusNode, pointedNode, pointAt, prefill, askSilk, consumePrefill }}>

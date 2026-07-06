@@ -8,6 +8,15 @@
 > constraint**, not a nice-to-have. Silk is the hands; Mat is the will — Silk
 > never acts unilaterally, and a Mat click IS the human action.
 
+> ## Doctrine — Realtime never interrupts in-flight input
+> Realtime updates in the Parlor never interrupt in-flight user input. Any
+> component that both subscribes to Realtime and hosts an input field MUST
+> implement the **lock-while-answering** pattern: while an input is focused/active,
+> incoming updates are *queued* (shown as "N updates pending"), never applied to
+> swap or unmount the input; the lock releases on submit or Escape/Cancel; and any
+> typed text auto-saves (localStorage) so nothing is lost. Reference impl:
+> `src/components/QuestionsPin.tsx`.
+
 Mat's private command room for SVRHIVE / Silk V1. Login-gated on his own domain
 (`hive.silkvelvetrecords.com`). Reads Silk's morning brief, browses the ledger,
 approves/rejects queue items, publishes corpus pages, watches for AI referrers,

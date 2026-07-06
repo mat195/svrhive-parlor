@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useSilk } from '../SilkContext';
 
@@ -6,6 +6,8 @@ interface Q {
   id: string; question: string; why_asking: string | null; urgency: number;
   question_context: any; source_ref: any;
 }
+
+const draftKey = (id: string) => `qdraft:${id}`;
 
 function ContextPreview({ ctx }: { ctx: any }) {
   if (!ctx || !ctx.type) return null;
@@ -39,27 +41,58 @@ export default function QuestionsPin() {
   const [answering, setAnswering] = useState(false);
   const [answer, setAnswer] = useState('');
   const [showSrc, setShowSrc] = useState(false);
+  const [pending, setPending] = useState(0);
   const { pointAt, askSilk } = useSilk();
 
-  const load = useCallback(async () => {
+  // Ref so realtime/effect handlers read the *current* answering state (no stale closure).
+  const answeringRef = useRef(false);
+  answeringRef.current = answering;
+
+  // load(force): swaps the pinned question. While answering, it's LOCKED — updates
+  // are queued (pending++) and applied only when the lock releases.
+  const load = useCallback(async (force = false) => {
+    if (answeringRef.current && !force) { setPending((p) => p + 1); return; }
     const { data } = await supabase.from('silk_questions')
       .select('id, question, why_asking, urgency, question_context, source_ref')
       .eq('status', 'open').order('urgency', { ascending: false }).order('created_at', { ascending: false }).limit(1);
     const next = data?.[0] ?? null;
-    setQ(next); setAnswering(false); setAnswer(''); setShowSrc(false);
+    setQ(next);
+    setAnswering(false);
+    setShowSrc(false);
+    setPending(0);
+    setAnswer(next ? (localStorage.getItem(draftKey(next.id)) ?? '') : '');
     if (next?.source_ref?.node_key) pointAt(next.source_ref.node_key);
   }, [pointAt]);
-  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    load();
+    const ch = supabase.channel('questions-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'silk_questions' }, () => {
+        if (answeringRef.current) setPending((p) => p + 1); else load(true);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load]);
+
+  // Auto-save draft per question so nothing is lost if the sheet closes.
+  useEffect(() => {
+    if (q && answer) localStorage.setItem(draftKey(q.id), answer);
+  }, [answer, q]);
 
   if (!q) return null;
 
   async function submit() {
     await supabase.from('silk_questions').update({ status: 'answered', answer, answered_at: new Date().toISOString() }).eq('id', q!.id);
-    load();
+    localStorage.removeItem(draftKey(q!.id));
+    load(true);
   }
   async function dismiss() {
     await supabase.from('silk_questions').update({ urgency: Math.max(0, q!.urgency - 2) }).eq('id', q!.id);
-    load();
+    load(true);
+  }
+  function cancelAnswer() {
+    setAnswering(false); // draft is kept in localStorage
+    if (pending > 0) load(true);
   }
 
   return (
@@ -75,10 +108,19 @@ export default function QuestionsPin() {
         <ContextPreview ctx={q.question_context} />
         {showSrc && <div className="muted small qsrc">source: {JSON.stringify(q.source_ref)}</div>}
         {answering && (
-          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
-            <input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer…" style={{ flex: 1 }} autoFocus />
-            <button className="btn sm" disabled={!answer.trim()} onClick={submit}>Save</button>
-          </div>
+          <>
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+              <input
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') cancelAnswer(); }}
+                placeholder="Your answer…" style={{ flex: 1 }} autoFocus
+              />
+              <button className="btn sm" disabled={!answer.trim()} onClick={submit}>Save</button>
+              <button className="btn sm ghost" onClick={cancelAnswer}>Cancel</button>
+            </div>
+            {pending > 0 && <div className="muted small" style={{ marginTop: '0.3rem' }}>answering — {pending} update{pending > 1 ? 's' : ''} pending</div>}
+          </>
         )}
       </div>
       {!answering && (
