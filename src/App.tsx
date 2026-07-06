@@ -5,6 +5,7 @@ import { SilkProvider, useSilk, type Room } from './SilkContext';
 import SignIn from './components/SignIn';
 import SilkPanel from './components/SilkPanel';
 import QuestionsPin from './components/QuestionsPin';
+import PresenceBar from './components/PresenceBar';
 import { Spider, Wordmark } from './components/Marks';
 import Brief from './views/Brief';
 import Ledger from './views/Ledger';
@@ -92,6 +93,7 @@ function HQ() {
       </main>
 
       <aside className="silkdock">
+        <PresenceBar />
         <header><Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}</header>
         <SilkPanel variant="dock" />
       </aside>
@@ -101,7 +103,7 @@ function HQ() {
         <div className="grip" onClick={() => setSheet(sheet === 'peek' ? 'h66' : sheet === 'h66' ? 'h100' : 'peek')}>
           <Spider size={14} className="spider" /> Silk {running && <span className="pulse" style={{ display: 'inline-block' }} />} <span className="muted">— tap to {sheet === 'peek' ? 'open' : 'close'}</span>
         </div>
-        {sheet !== 'peek' && <SilkPanel variant="sheet" />}
+        {sheet !== 'peek' && <><PresenceBar /><SilkPanel variant="sheet" /></>}
       </div>
       <nav className="mobtabs" aria-label="Rooms">
         {ROOMS.map((r) => (

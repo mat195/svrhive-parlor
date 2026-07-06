@@ -12,6 +12,10 @@ interface SilkCtx {
   prefill: string;                 // text piped into Silk's input ("Ask Silk about this")
   askSilk: (text: string) => void;
   consumePrefill: () => string;
+  typing: boolean;                 // Mat typing in Silk's input → LISTENING
+  setTyping: (v: boolean) => void;
+  chatBusy: boolean;               // chat LLM streaming → THINKING
+  setChatBusy: (v: boolean) => void;
 }
 
 const Ctx = createContext<SilkCtx | null>(null);
@@ -21,6 +25,8 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const [focusNode, setFocusNode] = useState<string | null>(null);
   const [pointedNode, setPointedNode] = useState<string | null>(null);
   const [prefill, setPrefill] = useState('');
+  const [typing, setTyping] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
 
   // Stable callbacks — unstable identities here caused consumers (QuestionsPin)
   // to re-run their load() every provider render, wiping in-flight input.
@@ -34,7 +40,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const consumePrefill = useCallback(() => { const p = prefillRef.current; setPrefill(''); return p; }, []);
 
   return (
-    <Ctx.Provider value={{ room, setRoom, focusNode, setFocusNode, pointedNode, pointAt, prefill, askSilk, consumePrefill }}>
+    <Ctx.Provider value={{ room, setRoom, focusNode, setFocusNode, pointedNode, pointAt, prefill, askSilk, consumePrefill, typing, setTyping, chatBusy, setChatBusy }}>
       {children}
     </Ctx.Provider>
   );

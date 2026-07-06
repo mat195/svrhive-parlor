@@ -2,6 +2,7 @@
 // per skills/corpus-page-spec.md. Saves a `proposed` corpus_drafts row. Nothing
 // publishes. Owner-only.
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
+import { startStatus, endStatus } from '../_shared/status.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -26,6 +27,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
   const targetQuery = (body.target_query ?? '').trim();
   if (!targetQuery) return json({ error: 'target_query required' }, 400);
+  const statusId = await startStatus('working', 'drafting a corpus page', 'foundry-generate', targetQuery);
 
   // Pull competitor URLs the query currently cites, from the ledger.
   const kws = targetQuery.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 4).slice(0, 5);
@@ -59,6 +61,7 @@ Deno.serve(async (req) => {
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
     gen = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
   } catch (e) {
+    await endStatus(statusId, false);
     return json({ error: 'generation failed: ' + (e instanceof Error ? e.message : String(e)) }, 500);
   }
 
@@ -88,7 +91,8 @@ Deno.serve(async (req) => {
     live_url: canonical,
     ledger_refs: latestRunId ? [{ kind: 'visibility_run', id: latestRunId }] : [],
   }).select('*').single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) { await endStatus(statusId, false); return json({ error: error.message }, 500); }
 
+  await endStatus(statusId, true);
   return json({ ok: true, draft });
 });

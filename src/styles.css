@@ -259,3 +259,22 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .audit-foot { display: flex; gap: 1rem; margin-top: 0.7rem; }
 .audit-foot .link { background: none; border: none; color: var(--muted); cursor: pointer; }
 .audit-raw { white-space: pre-wrap; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem; font-size: 0.75rem; margin-top: 0.6rem; max-height: 320px; overflow: auto; }
+
+/* Silk Presence Bar */
+.presence { position: relative; flex: none; }
+.presence-bar { display: flex; align-items: center; gap: 0.5rem; width: 100%; height: 28px; padding: 0 0.9rem; background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--muted); cursor: default; font-family: var(--sans); }
+.presence-working .presence-bar, .presence-thinking .presence-bar { cursor: pointer; }
+.presence-working { background: rgba(201,169,97,0.06); }
+.presence-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dot-idle { background: var(--muted); opacity: 0.5; }
+.dot-listening { background: var(--bone); animation: presence-pulse 2s var(--ease) infinite; }
+.dot-thinking { background: var(--gold); animation: presence-pulse 2s var(--ease) infinite; }
+.dot-working { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.dot-reporting { background: var(--accent-soft); box-shadow: 0 0 10px var(--gold); }
+.presence-state { text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.6rem; color: var(--gold); flex: none; }
+.presence-label { color: var(--muted); font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.presence-drawer { position: absolute; top: 28px; left: 0; right: 0; z-index: 30; background: var(--bg-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 0 0 10px 10px; padding: 0.7rem 0.9rem; font-size: 0.85rem; }
+.presence-drawer-acts { display: flex; gap: 1rem; margin-top: 0.5rem; }
+.presence-drawer-acts .link { background: none; border: none; color: var(--gold); cursor: pointer; }
+@keyframes presence-pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+@media (max-width: 860px) { .presence-bar { height: 32px; } }

@@ -14,7 +14,7 @@ const NODE_MAP: [RegExp, string][] = [
 ];
 
 export default function SilkPanel({ variant }: { variant: 'dock' | 'sheet' }) {
-  const { room, focusNode, prefill, consumePrefill, pointAt } = useSilk();
+  const { room, focusNode, prefill, consumePrefill, pointAt, setTyping, setChatBusy } = useSilk();
   const [chatId, setChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -40,11 +40,11 @@ export default function SilkPanel({ variant }: { variant: 'dock' | 'sheet' }) {
     e.preventDefault();
     const text = input.trim();
     if (!text || streaming) return;
-    setErr(''); setInput('');
+    setErr(''); setInput(''); setTyping(false);
     const id = await ensureChat();
     await supabase.from('parlor_messages').insert({ chat_id: id, role: 'user', content: text });
     setMessages((m) => [...m, { role: 'user', content: text }, { role: 'assistant', content: '', refs: [] }]);
-    setStreaming(true);
+    setStreaming(true); setChatBusy(true);
     try {
       const { text: full } = await streamSilkChat({
         chatId: id, message: text,
@@ -55,13 +55,15 @@ export default function SilkPanel({ variant }: { variant: 'dock' | 'sheet' }) {
       const hit = NODE_MAP.find(([re]) => re.test(full));
       if (hit) pointAt(hit[1]);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
-    finally { setStreaming(false); }
+    finally { setStreaming(false); setChatBusy(false); }
   }
 
   const composer = (
     <form className="composer" onSubmit={send}>
-      <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
-        placeholder={silkPlaceholder(room, focusNode)} disabled={streaming} aria-label="Ask Silk" />
+      <input ref={inputRef} value={input}
+        onChange={(e) => { setInput(e.target.value); setTyping(e.target.value.length > 0); }}
+        onBlur={() => setTyping(false)}
+        placeholder={silkPlaceholder(room, focusNode)} aria-label="Ask Silk" />
       <button className="btn sm" type="submit" disabled={streaming || !input.trim()}>Send</button>
     </form>
   );
