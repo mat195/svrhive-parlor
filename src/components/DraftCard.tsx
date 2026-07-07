@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
 import { useToast } from './Toast';
+import CollaboratorPanel from './CollaboratorPanel';
 
 // Derived, human status (item 4): what does this draft need from Mat?
 function draftStatus(d: Draft): { label: string; cls: string } {
@@ -42,7 +43,7 @@ function lineDiff(prev: string, curr: string): { sign: string; text: string }[] 
 
 export default function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
   const toast = useToast();
-  const [mode, setMode] = useState<'preview' | 'structure' | 'edit' | 'details'>('preview');
+  const [mode, setMode] = useState<'preview' | 'collaborators' | 'structure' | 'edit' | 'details'>('preview');
   const [editBody, setEditBody] = useState(stripFrontmatter(draft.markdown_body || ''));
   const [prevBody, setPrevBody] = useState<string | null>(null);
   const [busy, setBusy] = useState('');
@@ -228,10 +229,12 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             </div>
           )}
           <div className="subtabs" style={{ marginTop: '0.6rem' }}>
-            {(['preview', 'structure', 'edit', 'details'] as const).map((m) => (
+            {(['preview', 'collaborators', 'structure', 'edit', 'details'] as const).map((m) => (
               <button key={m} className={mode === m ? 'chip active' : 'chip'} onClick={() => setMode(m)}>{m}</button>
             ))}
           </div>
+
+          {mode === 'collaborators' && <CollaboratorPanel draftId={draft.id} onChange={onChange} />}
 
           {mode === 'preview' && (
             draft.status === 'edited' && prevBody

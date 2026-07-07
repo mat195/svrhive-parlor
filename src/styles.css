@@ -328,6 +328,23 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .linklike:hover { color: var(--ink); }
 .linklike.danger:hover { color: var(--err); }
 .linklike:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+/* Collaborator panel */
+.collab-panel { margin: 0.5rem 0; }
+.collab-group { margin: 0.5rem 0; }
+.collab-group-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.3rem; }
+.collab-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.collab-chip { display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; padding: 0.2rem 0.35rem 0.2rem 0.6rem; font-size: 0.84rem; }
+.collab-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.15rem; border-radius: 999px; }
+.collab-x:hover { color: var(--err); background: rgba(255,0,0,0.1); }
+.collab-add { position: relative; margin-top: 0.7rem; }
+.collab-add input { width: 100%; }
+.collab-suggest { position: absolute; z-index: 20; left: 0; right: 0; background: var(--bg-2); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; margin-top: 0.2rem; overflow: hidden; }
+.collab-suggest-item { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); padding: 0.45rem 0.6rem; cursor: pointer; font-size: 0.86rem; }
+.collab-suggest-item:hover { background: rgba(255,255,255,0.06); }
+.collab-track { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.5rem; }
+.collab-track input { flex: 1; min-width: 8rem; }
+.collab-diff { margin-top: 0.6rem; }
+.collab-diff pre { white-space: pre-wrap; background: rgba(0,0,0,0.25); padding: 0.55rem; border-radius: 8px; font-size: 0.8rem; border: 1px solid rgba(80,200,120,0.25); }
 .draft pre { white-space: pre-wrap; background: rgba(0,0,0,0.25); padding: 0.6rem; border-radius: 8px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.08); }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; padding: 1.2rem; z-index: 100; }
 .modal { width: min(24rem, 92vw); background: var(--bg-2); border: 1px solid var(--gold); border-radius: 14px; padding: 1.3rem; }
