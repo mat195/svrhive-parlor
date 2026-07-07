@@ -77,6 +77,11 @@ export const SILK_TOOLS = [
     description: 'Query the web-fetch cache (what Silk has already fetched). Layer 5.',
     input_schema: { type: 'object', properties: { limit: { type: 'number' } } },
   },
+  {
+    name: 'citation_reconciliation',
+    description: 'Reconcile citations-vs-mentions across the AI visibility battery: how many cells NAMED Lucius P. Thundercat vs how many cited sources, how many distinct domains engines cite, whether any LPT-OWNED domain (silkvelvetrecords.com / open.spotify.com) is ever cited, and the top cited domains. Use for questions about where AI engines source answers about LPT and whether his own pages get cited.',
+    input_schema: { type: 'object', properties: {} },
+  },
 ];
 
 let _spotifyToken: { token: string; exp: number } | null = null;
@@ -238,6 +243,7 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
     if (name === 'ledger_query_mentions') return await ledger('visibility_results', 'engine, category, prompt, mentioned, response_excerpt', limit);
     if (name === 'ledger_query_drafts') return await ledger('corpus_drafts', 'target_query, status, filename, live_url', limit);
     if (name === 'ledger_query_web_fetches') return await ledger('web_fetch_cache', 'url, status, fetched_at', limit);
+    if (name === 'citation_reconciliation') { const { data, error } = await admin.rpc('citation_reconciliation'); return error ? { error: error.message } : data; }
     return { error: `unknown tool ${name}` };
   } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
 }

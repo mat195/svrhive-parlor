@@ -4,6 +4,7 @@ const FETCH_TOOLS = new Set([
   'web_fetch', 'spotify_lookup', 'spotify_track_details', 'spotify_artist_catalog',
   'read_config_file', 'journal_retrieve', 'get_action_queue_item', 'get_ledger_record',
   'ledger_query_battery', 'ledger_query_mentions', 'ledger_query_drafts', 'ledger_query_web_fetches',
+  'citation_reconciliation',
 ]);
 
 // SOURCING gate: did Silk ask Mat for data he could have fetched himself?
