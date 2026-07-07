@@ -239,11 +239,15 @@ export interface ToolLoopResult { text: string; toolTrace: { name: string; input
  * Returns the final assistant text once Claude stops requesting tools.
  */
 export async function runToolLoop(opts: {
-  system: string; userText: string; model: string; anthropicKey: string;
-  callerJwt: string; maxTokens?: number; maxTurns?: number; tools?: typeof SILK_TOOLS;
+  system: string; model: string; anthropicKey: string; callerJwt: string;
+  userText?: string; history?: { role: string; content: unknown }[];
+  maxTokens?: number; maxTurns?: number; tools?: typeof SILK_TOOLS;
 }): Promise<ToolLoopResult> {
   const tools = opts.tools ?? SILK_TOOLS;
-  const messages: { role: string; content: unknown }[] = [{ role: 'user', content: opts.userText }];
+  // Full conversation history when given (chat continuity); else just the one message.
+  const messages: { role: string; content: unknown }[] = opts.history?.length
+    ? [...opts.history]
+    : [{ role: 'user', content: opts.userText ?? '' }];
   const toolTrace: { name: string; input: unknown }[] = [];
   const maxTurns = opts.maxTurns ?? 5;
 

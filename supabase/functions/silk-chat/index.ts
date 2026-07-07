@@ -147,6 +147,32 @@ Deno.serve(async (req) => {
     'PROVENANCE: if your context does not contain the answer, say so plainly — do not invent. Never fabricate metrics, mentions, or facts about the artist/label.\n' +
     'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.';
 
+  // Chat continuity: load the prior turns so Silk remembers the conversation (the
+  // client already persisted the current user message before calling us). Without this
+  // Silk answers every message in isolation.
+  let history: { role: string; content: string }[] = [];
+  if (body.chat_id) {
+    const { data: msgs } = await admin.from('parlor_messages')
+      .select('role, content, created_at').eq('chat_id', body.chat_id).neq('role', 'system')
+      .order('created_at', { ascending: true }).limit(24);
+    history = (msgs ?? [])
+      .filter((m) => (m.content ?? '').trim())
+      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content as string }));
+  }
+  // Ensure the thread ends with the current user message, and starts with a user turn.
+  if (!history.length || history[history.length - 1].content !== message || history[history.length - 1].role !== 'user') {
+    history.push({ role: 'user', content: message });
+  }
+  while (history.length && history[0].role !== 'user') history.shift();
+  // Merge accidental consecutive same-role turns (Anthropic expects alternation).
+  const merged: { role: string; content: string }[] = [];
+  for (const m of history) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) last.content = `${last.content}\n\n${m.content}`;
+    else merged.push({ ...m });
+  }
+  history = merged;
+
   const stream = new ReadableStream({
     async start(controller) {
       sse(controller, 'refs', { ledger_refs: refs, model, identity_hash: identityHash, assembly_id: assemblyId, skills: built.skillsLoaded });
@@ -156,7 +182,7 @@ Deno.serve(async (req) => {
         // / ledger_query mid-response instead of asking Mat for retrievable data.
         // max_tokens is task-classified by the builder (err upward — truncation is worse).
         const { text, toolTrace, stopReason } = await runToolLoop({
-          system, userText: message, model, anthropicKey: ANTHROPIC_API_KEY,
+          system, history, model, anthropicKey: ANTHROPIC_API_KEY,
           callerJwt: jwt, maxTokens: built.maxTokens,
         });
         full = text;
