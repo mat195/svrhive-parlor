@@ -42,12 +42,13 @@ function lineDiff(prev: string, curr: string): { sign: string; text: string }[] 
 
 export default function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
   const toast = useToast();
-  const [mode, setMode] = useState<'preview' | 'edit' | 'details'>('preview');
+  const [mode, setMode] = useState<'preview' | 'structure' | 'edit' | 'details'>('preview');
   const [editBody, setEditBody] = useState(stripFrontmatter(draft.markdown_body || ''));
   const [prevBody, setPrevBody] = useState<string | null>(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [reviseNote, setReviseNote] = useState('');
+  const [fills, setFills] = useState<Record<string, string>>({});
   const [listening, setListening] = useState(false);
   const recogRef = useRef<any>(null);
   const SpeechRec = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
@@ -111,6 +112,36 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
     await supabase.from('corpus_drafts').update({ status: 'rejected', mat_note: note, updated_at: new Date().toISOString() }).eq('id', draft.id);
     setBusy(''); onChange();
   }
+  // Item 3: fill a [MAT: …] placeholder inline — Mat types his take, we splice it into
+  // the markdown deterministically (no LLM). When none remain, status flips to ready.
+  async function fillPlaceholder(ph: string) {
+    const val = (fills[ph] ?? '').trim();
+    if (!val || busy) return;
+    setBusy('fill');
+    const newBody = (draft.markdown_body ?? '').split(ph).join(val);
+    await supabase.from('corpus_drafts').update({ markdown_body: newBody, status: draft.status === 'proposed' ? 'edited' : draft.status, updated_at: new Date().toISOString() }).eq('id', draft.id);
+    setFills((f) => { const n = { ...f }; delete n[ph]; return n; });
+    setBusy(''); onChange();
+  }
+  // Item 2: deterministic list/table row controls — reorder/delete/pin without an LLM.
+  function editBlockRow(action: 'up' | 'down' | 'del' | 'pin', blockStart: number, rowIdx: number) {
+    const lines = (draft.markdown_body ?? '').split('\n');
+    // find the contiguous block of table/list rows starting at blockStart
+    const isRow = (l: string) => /^\s*\|/.test(l) || /^\s*[-*+]\s+/.test(l);
+    let end = blockStart; while (end + 1 < lines.length && isRow(lines[end + 1])) end++;
+    const block = lines.slice(blockStart, end + 1);
+    const isTable = /^\s*\|/.test(block[0]);
+    const headerCount = isTable ? 2 : 0; // table: header row + separator stay put
+    const head = block.slice(0, headerCount);
+    const rows = block.slice(headerCount);
+    if (rowIdx < 0 || rowIdx >= rows.length) return;
+    if (action === 'del') rows.splice(rowIdx, 1);
+    else if (action === 'pin') { const [r] = rows.splice(rowIdx, 1); rows.unshift(r); }
+    else if (action === 'up' && rowIdx > 0) { [rows[rowIdx - 1], rows[rowIdx]] = [rows[rowIdx], rows[rowIdx - 1]]; }
+    else if (action === 'down' && rowIdx < rows.length - 1) { [rows[rowIdx + 1], rows[rowIdx]] = [rows[rowIdx], rows[rowIdx + 1]]; }
+    const newLines = [...lines.slice(0, blockStart), ...head, ...rows, ...lines.slice(end + 1)];
+    supabase.from('corpus_drafts').update({ markdown_body: newLines.join('\n'), status: draft.status === 'proposed' ? 'edited' : draft.status, updated_at: new Date().toISOString() }).eq('id', draft.id).then(() => onChange());
+  }
   async function doRevise() {
     const note = reviseNote.trim();
     if (!note || busy) return;
@@ -158,10 +189,25 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
       <div className="draft-query">{draft.target_query}</div>
       {draft.silk_explains && <div className="silk-explains">“{draft.silk_explains}”</div>}
 
-      {!isPublished && (
+      {!isPublished && (() => {
+        const placeholders = [...new Set([...(draft.markdown_body ?? '').matchAll(/\[MAT:[^\]]*\]/g)].map((m) => m[0]))];
+        return (
         <>
+          {placeholders.length > 0 && (
+            <div className="mat-inputs">
+              <div className="moment-label">Silk needs your take ({placeholders.length})</div>
+              {placeholders.map((ph) => (
+                <div key={ph} className="mat-input-row">
+                  <span className="muted small">{ph}</span>
+                  <input value={fills[ph] ?? ''} onChange={(e) => setFills((f) => ({ ...f, [ph]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && fills[ph]?.trim()) fillPlaceholder(ph); }} placeholder="Your take…" />
+                  <button className="btn sm" disabled={!fills[ph]?.trim() || busy === 'fill'} onClick={() => fillPlaceholder(ph)}>Save</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="subtabs" style={{ marginTop: '0.6rem' }}>
-            {(['preview', 'edit', 'details'] as const).map((m) => (
+            {(['preview', 'structure', 'edit', 'details'] as const).map((m) => (
               <button key={m} className={mode === m ? 'chip active' : 'chip'} onClick={() => setMode(m)}>{m}</button>
             ))}
           </div>
@@ -171,6 +217,43 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
               ? <div className="diff">{lineDiff(prevBody, draft.markdown_body || '').map((d, i) => <div key={i} className={d.sign === '+' ? 'add' : 'del'}>{d.sign} {d.text}</div>)}</div>
               : <div className="note-preview" dangerouslySetInnerHTML={{ __html: render(draft.markdown_body || '') }} />
           )}
+          {mode === 'structure' && (() => {
+            const lines = stripFrontmatter(draft.markdown_body || '').split('\n');
+            const isRow = (l: string) => /^\s*\|/.test(l) || /^\s*[-*+]\s+/.test(l);
+            // map structure-view line index → real markdown line index (frontmatter offset)
+            const fmLines = ((draft.markdown_body || '').match(/^---[\s\S]*?---\n?/)?.[0].split('\n').length ?? 1) - 1;
+            const blocks: { start: number; isTable: boolean; rows: { text: string; idx: number }[] }[] = [];
+            for (let i = 0; i < lines.length; i++) {
+              if (isRow(lines[i]) && (i === 0 || !isRow(lines[i - 1]))) {
+                let end = i; while (end + 1 < lines.length && isRow(lines[end + 1])) end++;
+                const isTable = /^\s*\|/.test(lines[i]);
+                const rows = lines.slice(i + (isTable ? 2 : 0), end + 1).map((text, idx) => ({ text, idx }));
+                if (rows.length) blocks.push({ start: i + fmLines, isTable, rows });
+                i = end;
+              }
+            }
+            if (!blocks.length) return <p className="muted small">No lists or tables to reorder.</p>;
+            return (
+              <div className="structure">
+                <p className="muted small">Reorder / remove rows — saves instantly, no AI.</p>
+                {blocks.map((b, bi) => (
+                  <div key={bi} className="struct-block">
+                    {b.rows.map((r) => (
+                      <div key={r.idx} className="struct-row">
+                        <span className="struct-cell">{r.text.replace(/^\s*[|*+-]\s*/, '').replace(/\|/g, ' · ').slice(0, 70)}</span>
+                        <span className="struct-ctrls">
+                          <button title="Pin to top" onClick={() => editBlockRow('pin', b.start, r.idx)}>⤒</button>
+                          <button title="Up" onClick={() => editBlockRow('up', b.start, r.idx)}>↑</button>
+                          <button title="Down" onClick={() => editBlockRow('down', b.start, r.idx)}>↓</button>
+                          <button title="Remove" onClick={() => editBlockRow('del', b.start, r.idx)}>✕</button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {mode === 'edit' && (
             <div className="editor">
               <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={12} />
@@ -207,7 +290,8 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             <button className="btn sm ghost" disabled={!!busy} onClick={doRegenerate}>{busy === 'regen' ? 'Regenerating…' : 'Regenerate'}</button>
           </div>
         </>
-      )}
+        );
+      })()}
 
       {isPublished && (
         <div className="published">

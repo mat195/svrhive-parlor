@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useToast } from '../components/Toast';
+import { useSilk } from '../SilkContext';
 
 type Tab = 'results' | 'runs' | 'journal' | 'mentions' | 'metrics' | 'assemblies';
 const TABS: { id: Tab; label: string }[] = [
@@ -13,7 +15,24 @@ const TABS: { id: Tab; label: string }[] = [
 const PAGE = 25;
 
 export default function Ledger() {
+  const toast = useToast();
+  const { setRoom } = useSilk();
   const [tab, setTab] = useState<Tab>('results');
+
+  // Ledger → Workshop bridge: file a pre-filled corpus proposal with the evidence.
+  async function targetQuery(r: any) {
+    const { error } = await supabase.from('action_queue').insert({
+      kind: 'corpus-initiative', status: 'proposed', risk_tier: 'amber',
+      payload: {
+        title: `Corpus page: ${r.prompt}`, target_query: r.prompt, generated_by: 'ledger-bridge',
+        rationale: `Battery loss: ${r.engine} did NOT mention Lucius P. Thundercat for "${r.prompt}" (${r.category}). ${Array.isArray(r.citations) && r.citations.length ? `It cited: ${r.citations.slice(0, 5).join(', ')}.` : ''} Draft a page to win this query.`,
+        evidence: { engine: r.engine, category: r.category, citations: r.citations, response_excerpt: r.response_excerpt },
+      },
+    });
+    if (error) { toast(`Failed: ${error.message}`); return; }
+    toast('Filed as a corpus proposal → Workshop', async () => { setRoom('workshop'); localStorage.setItem('workshop_tab', 'actions'); });
+  }
+
   const [rows, setRows] = useState<any[]>([]);
   const [limit, setLimit] = useState(PAGE);
   const [category, setCategory] = useState('');
@@ -77,7 +96,7 @@ export default function Ledger() {
 
       {loading && rows.length === 0 ? <p className="muted">Loading…</p> : (
         <ul className="rows">
-          {rows.map((r) => <li key={r.id} className="row">{renderRow(tab, r)}</li>)}
+          {rows.map((r) => <li key={r.id} className="row">{renderRow(tab, r, targetQuery)}</li>)}
           {rows.length === 0 && <p className="muted">No rows.</p>}
         </ul>
       )}
@@ -89,7 +108,7 @@ export default function Ledger() {
   );
 }
 
-function renderRow(tab: Tab, r: any) {
+function renderRow(tab: Tab, r: any, onTarget?: (r: any) => void) {
   if (tab === 'results') {
     return (
       <>
@@ -100,6 +119,7 @@ function renderRow(tab: Tab, r: any) {
         <div className="row-title">{r.prompt}</div>
         {r.response_excerpt && <div className="row-ex muted">{r.response_excerpt.slice(0, 220)}</div>}
         {Array.isArray(r.citations) && r.citations.length > 0 && <div className="muted small">{r.citations.length} citations</div>}
+        {!r.mentioned && onTarget && <button className="btn sm" style={{ marginTop: '0.4rem' }} onClick={() => onTarget(r)}>Target this query →</button>}
       </>
     );
   }
