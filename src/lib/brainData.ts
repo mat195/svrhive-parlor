@@ -31,7 +31,7 @@ export const catalog: Node[] = [
   { key: 'rel-they-are-not-your-friends-remix', label: 'They Are Not Your Friends [Remix] · 2023', confidence: 'verified' },
   { key: 'rel-wish-you-the-best', label: 'Wish You the Best', confidence: 'verified' },
   { key: 'rel-neck-me-down-oclock', label: "Neck Me Down O'clock", confidence: 'verified' },
-  { key: 'rel-love-you-leave-you', label: 'Love You/Leave You (feat. LPT)', confidence: 'unverified' },
+  { key: 'rel-love-you-leave-you', label: 'Love You/Leave You — Nick Nigh feat. LPT · 2023', confidence: 'verified', note: 'Spotify-verified' },
   { key: 'rel-forbidden-fruit', label: 'Forbidden Fruit (feat. Curtis Williams & LPT)', confidence: 'verified' },
 ];
 
