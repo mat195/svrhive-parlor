@@ -127,12 +127,39 @@ Deno.serve(async (req) => {
   const rawMessage = (body.message ?? '').trim();
   if (!rawMessage) return new Response('empty message', { status: 400, headers: CORS });
 
-  // /deep flag → stronger model
-  const deep = body.deep === true || /^\/deep\b/i.test(rawMessage);
   const message = rawMessage.replace(/^\/deep\b\s*/i, '');
-  const model = deep ? DEEP_MODEL : CHEAP_MODEL;
+  const model = DEEP_MODEL; // P1-5: reasoning quality is the product — strongest default.
 
   const { ctx, refs } = await gatherContext(message);
+
+  // --- P0-1: Session state + referent pinning ---
+  const sessionId = body.chat_id ?? 'no-session';
+  let openLoops: { type: string; item_id?: string; description: string; options_offered?: string; created_at?: string }[] = [];
+  if (body.chat_id) {
+    const { data: ss } = await admin.from('silk_session_state').select('open_loops').eq('session_id', sessionId).maybeSingle();
+    openLoops = (ss?.open_loops as typeof openLoops) ?? [];
+  }
+  // Short/ambiguous replies resolve against the NEWEST open loop, then trigger its action.
+  const isResolution = /^\s*(approve|approved|yes|yep|yeah|ok|okay|do it|go ahead|sure|confirm|hold|iterate|reject|no|nope|the (first|second|third|1st|2nd|3rd) one|[1-3])[.!\s]*$/i.test(message);
+  let resolutionNote = '';
+  if (isResolution && openLoops.length) {
+    const loop = openLoops[openLoops.length - 1];
+    const affirm = /^\s*(approve|approved|yes|yep|yeah|ok|okay|do it|go ahead|sure|confirm|1|the first|1st)/i.test(message);
+    const reject = /^\s*(reject|no|nope)/i.test(message);
+    if (loop.item_id && (affirm || reject)) {
+      const { data: qi } = await admin.from('action_queue').select('payload').eq('id', loop.item_id).maybeSingle();
+      await admin.from('action_queue').update({ status: affirm ? 'approved' : 'rejected', payload: { ...(qi?.payload ?? {}), decided_at: new Date().toISOString() } }).eq('id', loop.item_id);
+      resolutionNote = affirm
+        ? `Mat replied "${message}" → this RESOLVES your open loop: "${loop.description}". You have ALREADY approved queue item ${loop.item_id} — the executor is creating the artifact now. Confirm to Mat in one line. Do NOT ask what to approve.`
+        : `Mat replied "${message}" → REJECTED your open loop: "${loop.description}". Confirm briefly.`;
+      await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'resolve', description: `${affirm ? 'approved' : 'rejected'}: ${loop.description}`, item_id: loop.item_id });
+      openLoops = openLoops.slice(0, -1);
+    }
+  }
+  const openLoopsBlock = openLoops.length
+    ? `--- AWAITING MAT (open loops — resolve short replies against the NEWEST) ---\n${openLoops.map((l, i) => `${i + 1}. ${l.description}${l.options_offered ? ` [${l.options_offered}]` : ''}`).join('\n')}\nShort replies like "approve"/"yes"/"2" resolve against these.\n\n`
+    : '';
+  const resolutionBlock = resolutionNote ? `--- LOOP RESOLUTION (act on this) ---\n${resolutionNote}\n\n` : '';
 
   // Route through the five-layer retrieval assembly (Brief Seven). ctx becomes the
   // compact L5 current-state snapshot; the builder handles L1-L4 + records the assembly.
@@ -141,11 +168,13 @@ Deno.serve(async (req) => {
   const assemblyId = built.assemblyId;
 
   const system =
+    resolutionBlock + openLoopsBlock +
     built.system +
     '\n\n--- OPERATING RULES (Parlor) ---\n' +
     'Answer ONLY from the layered context above plus general knowledge that does not assert facts about Lucius P. Thundercat / Silk Velvet Records.\n' +
     'PROVENANCE: if your context does not contain the answer, say so plainly — do not invent. Never fabricate metrics, mentions, or facts about the artist/label.\n' +
-    'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.';
+    'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.\n' +
+    'AGENT LOOP: when you propose a concrete action (draft a corpus page, run an audit, apply a fix), call the queue_for_approval tool to FILE it — that pins it as the open loop so Mat\'s next "approve"/"yes" resolves against it and it executes. Do not just describe an action you could take; file it.';
 
   // Chat continuity: load the prior turns so Silk remembers the conversation (the
   // client already persisted the current user message before calling us). Without this
@@ -188,11 +217,15 @@ Deno.serve(async (req) => {
         full = text;
         if (toolTrace.length) {
           sse(controller, 'tools', { used: toolTrace.map((t) => t.name) });
-          // Journal the completion: Silk retrieved live data via tools rather than asking Mat.
-          await admin.from('silk_journal').insert({
-            entry: `Chat tool-use: called ${toolTrace.map((t) => t.name).join(', ')} to retrieve live data instead of asking Mat. Query: "${message.slice(0, 100)}".`,
-            tags: ['tool-use', 'chat', 'retrieval'],
-          });
+          // Session log (P0-1): current-session truth, append-only — never from retrieval.
+          for (const t of toolTrace) {
+            await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'tool_call', description: `${t.name}(${JSON.stringify(t.input).slice(0, 120)})` });
+            // Pin an open loop for anything Silk filed for approval.
+            if (t.name === 'queue_for_approval' && (t.result as any)?.item_id) {
+              openLoops.push({ type: 'approval', item_id: (t.result as any).item_id, description: (t.result as any).description ?? 'a proposed action', created_at: new Date().toISOString() });
+              await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'filing', description: (t.result as any).description, item_id: (t.result as any).item_id });
+            }
+          }
         }
         // Self-detected truncation → journal a config gap (never silently cut off).
         if (stopReason === 'max_tokens') {
@@ -213,6 +246,10 @@ Deno.serve(async (req) => {
           content: full,
           ledger_refs: refs,
         });
+      }
+      // Persist session state — the open loops carry to Mat's next message (P0-1).
+      if (body.chat_id) {
+        await admin.from('silk_session_state').upsert({ session_id: sessionId, open_loops: openLoops.slice(-8), updated_at: new Date().toISOString() }, { onConflict: 'session_id' });
       }
       sse(controller, 'done', { ok: true, identity_hash: identityHash });
       controller.close();

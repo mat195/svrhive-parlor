@@ -33,6 +33,11 @@ export const SILK_TOOLS = [
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'track id OR "title artist"' } }, required: ['query'] },
   },
   {
+    name: 'queue_for_approval',
+    description: "File an action for Mat's approval and pin it as the open loop, so his next short reply ('approve'/'yes') resolves against it. Use when you propose a concrete action (draft a corpus page, run an audit, apply a fix). Returns the queue item id.",
+    input_schema: { type: 'object', properties: { kind: { type: 'string', description: 'corpus-initiative | audit-initiative | metadata-fix' }, target_query: { type: 'string' }, description: { type: 'string', description: 'plain one-line: what approving does' } }, required: ['kind', 'description'] },
+  },
+  {
     name: 'read_config_file',
     description: "Read the ACTUAL current contents of an allowlisted repo config/rulebook file (ground truth). Use this to VERIFY before claiming any config is 'locked'/'set' — never assert config state from memory. Allowed: scripts/prompts.json, docs/LUCIUS_ENTITY_MASTER.md, skills/SILK_IDENTITY.md, skills/<name>.md.",
     input_schema: { type: 'object', properties: { path: { type: 'string', description: 'e.g. scripts/prompts.json' } }, required: ['path'] },
@@ -216,6 +221,11 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
     if (name === 'spotify_lookup') return await spotifyLookup(String(input.query ?? ''), String(input.type ?? 'track'));
     if (name === 'spotify_artist_catalog') return await spotifyArtistCatalog(String(input.artist_id ?? LPT_ARTIST));
     if (name === 'spotify_track_details') return await spotifyTrackDetails(String(input.query ?? ''));
+    if (name === 'queue_for_approval') {
+      const kind = ['corpus-initiative', 'audit-initiative', 'metadata-fix', 'catalog-audit'].includes(String(input.kind)) ? String(input.kind) : 'corpus-initiative';
+      const { data } = await admin.from('action_queue').insert({ kind, status: 'proposed', risk_tier: 'amber', payload: { title: String(input.description ?? ''), target_query: input.target_query ?? null, generated_by: 'silk-chat', description: input.description } }).select('id').single();
+      return { item_id: data?.id, kind, description: input.description, filed: true };
+    }
     if (name === 'read_config_file') return await readConfigFile(String(input.path ?? ''));
     if (name === 'get_action_queue_item') return await getRecord('action_queue', String(input.id ?? ''));
     if (name === 'get_ledger_record') return await getRecord(String(input.table ?? ''), String(input.id ?? ''));
@@ -232,7 +242,7 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
   } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
 }
 
-export interface ToolLoopResult { text: string; toolTrace: { name: string; input: unknown }[]; turns: number; stopReason: string }
+export interface ToolLoopResult { text: string; toolTrace: { name: string; input: unknown; result?: unknown }[]; turns: number; stopReason: string }
 
 /**
  * Multi-turn Anthropic tool-use loop. Non-streaming (tool turns need full messages).
@@ -248,17 +258,26 @@ export async function runToolLoop(opts: {
   const messages: { role: string; content: unknown }[] = opts.history?.length
     ? [...opts.history]
     : [{ role: 'user', content: opts.userText ?? '' }];
-  const toolTrace: { name: string; input: unknown }[] = [];
-  const maxTurns = opts.maxTurns ?? 5;
+  const toolTrace: { name: string; input: unknown; result?: unknown }[] = [];
+  const maxTurns = opts.maxTurns ?? 15; // real agent loop, not single-shot
+
+  // Anthropic call with exponential backoff on 429 / 529 — never dead-end a task.
+  const anthropic = async (payload: unknown): Promise<{ ok: boolean; data: any; status: number }> => {
+    let delay = 1000;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', headers: { 'x-api-key': opts.anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 429 || res.status === 529) { await new Promise((r) => setTimeout(r, delay)); delay = Math.min(delay * 2, 32000); continue; }
+      return { ok: res.ok, data: await res.json(), status: res.status };
+    }
+    return { ok: false, data: { error: { message: 'rate-limited beyond backoff window' } }, status: 429 };
+  };
 
   for (let turn = 1; turn <= maxTurns; turn++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': opts.anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: opts.model, max_tokens: opts.maxTokens ?? 1500, system: opts.system, tools, messages }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { text: `[silk tool-loop error ${res.status}: ${data?.error?.message ?? ''}]`, toolTrace, turns: turn, stopReason: 'error' };
+    const { ok, data, status } = await anthropic({ model: opts.model, max_tokens: opts.maxTokens ?? 1500, system: opts.system, tools, messages });
+    if (!ok) return { text: `[silk agent-loop error ${status}: ${data?.error?.message ?? ''}]`, toolTrace, turns: turn, stopReason: 'error' };
 
     const blocks = data?.content ?? [];
     const textOut = blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
@@ -270,19 +289,14 @@ export async function runToolLoop(opts: {
     const toolResults: unknown[] = [];
     for (const b of blocks) {
       if (b.type !== 'tool_use') continue;
-      toolTrace.push({ name: b.name, input: b.input });
       const result = await executeTool(b.name, b.input ?? {}, opts.callerJwt);
+      toolTrace.push({ name: b.name, input: b.input, result });
       toolResults.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(result).slice(0, 8000) });
     }
     messages.push({ role: 'user', content: toolResults });
   }
-  // Ran out of turns — do one final no-tools call to force a text answer.
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': opts.anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: opts.model, max_tokens: opts.maxTokens ?? 1500, system: opts.system, messages }),
-  });
-  const data = await res.json();
+  // Ran out of turns — one final no-tools call to force a text answer.
+  const { data } = await anthropic({ model: opts.model, max_tokens: opts.maxTokens ?? 1500, system: opts.system, messages });
   const textOut = (data?.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
   return { text: textOut, toolTrace, turns: maxTurns, stopReason: data?.stop_reason ?? 'max_turns' };
 }
