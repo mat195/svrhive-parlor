@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { callFn } from '../lib/api';
 import { useSilk } from '../SilkContext';
 import { useToast } from '../components/Toast';
 
@@ -70,7 +71,22 @@ export default function Brief() {
 
   async function doIt() {
     if (!moment) return;
-    await supabase.from('action_queue').update({ status: 'approved', payload: { acting: true } }).eq('id', moment.id);
+    const DRAFT_KINDS = new Set(['corpus-initiative', 'corpus-page']);
+    const { data: row } = await supabase.from('action_queue').select('payload').eq('id', moment.id).single();
+    const payload = row?.payload ?? {};
+    // Draft-creation moments must actually create + verify the draft before approving.
+    if (DRAFT_KINDS.has(moment.kind)) {
+      try {
+        const r = await callFn('foundry-generate', { target_query: String(payload.target_query ?? '') });
+        if (!r?.ok || !r?.draft?.id) throw new Error(r?.error || 'no draft created');
+        await supabase.from('action_queue').update({ status: 'approved', payload: { ...payload, decided_at: new Date().toISOString(), draft_id: r.draft.id, draft_created: true } }).eq('id', moment.id);
+      } catch (e) {
+        await supabase.from('action_queue').update({ payload: { ...payload, approval_error: e instanceof Error ? e.message : String(e) } }).eq('id', moment.id);
+        setSheet(false); load(); return; // don't mark approved / navigate on failure
+      }
+    } else {
+      await supabase.from('action_queue').update({ status: 'approved', payload: { ...payload, decided_at: new Date().toISOString(), acting: true } }).eq('id', moment.id);
+    }
     await supabase.from('silk_journal').insert({ entry: `Mat approved: ${moment.button} — ${moment.proposal.slice(0, 120)}`, tags: ['moment', 'decision'] });
     setSheet(false); setRoom('workshop'); load();
   }

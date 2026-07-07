@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { callFn } from '../lib/api';
 import AuditCard from '../components/AuditCard';
 import { useToast } from '../components/Toast';
+
+// Kinds whose approval must synchronously create a corpus_drafts row (verified).
+const DRAFT_KINDS = new Set(['corpus-initiative', 'corpus-page']);
 
 type Risk = 'green' | 'amber' | 'red' | 'grey';
 interface QueueItem {
@@ -71,6 +75,9 @@ export default function Queue() {
   useEffect(() => { load(); }, []);
 
   async function decide(item: QueueItem, status: 'approved' | 'rejected') {
+    // Draft-creation approvals MUST synchronously create the draft and verify it
+    // landed before showing "approved" (approved ≠ done unless verified).
+    if (status === 'approved' && DRAFT_KINDS.has(item.kind)) return approveDraftCreation(item);
     setBusy(item.id);
     const note = window.prompt(`Optional note for ${status}:`) ?? '';
     const prev = item.payload;
@@ -79,6 +86,32 @@ export default function Queue() {
     if (error) { alert(error.message); return; }
     if (status === 'rejected') toast('Item rejected', async () => { await supabase.from('action_queue').update({ status: 'proposed', payload: prev }).eq('id', item.id); load(); });
     load();
+  }
+
+  // Approve a draft-creation item: trigger foundry-generate, verify the corpus_drafts
+  // row was created, link it, THEN mark approved. On failure the item stays in the
+  // queue with an error (never a silent "approved" with no draft).
+  async function approveDraftCreation(item: QueueItem) {
+    const q = String(item.payload?.target_query ?? '').trim();
+    setBusy(item.id);
+    try {
+      if (!q) throw new Error('no target_query on this item');
+      const r = await callFn('foundry-generate', { target_query: q });
+      if (!r?.ok || !r?.draft?.id) throw new Error(r?.error || 'foundry-generate returned no draft');
+      // foundry-generate already SELECT-verifies its insert (write_proof). Link + approve.
+      await supabase.from('action_queue').update({
+        status: 'approved',
+        payload: { ...item.payload, decided_at: new Date().toISOString(), draft_id: r.draft.id, draft_created: true, write_proof: r.write_proof, approval_error: null },
+      }).eq('id', item.id);
+      toast('Draft created → Workshop → Drafts');
+    } catch (e) {
+      // Do NOT approve. Keep in queue, surface the error.
+      await supabase.from('action_queue').update({
+        payload: { ...item.payload, approval_error: e instanceof Error ? e.message : String(e), error_at: new Date().toISOString() },
+      }).eq('id', item.id);
+      toast(`Draft generation FAILED — kept in queue: ${e instanceof Error ? e.message : e}`);
+    }
+    setBusy(null); load();
   }
 
   // Batch-approve every visible GREEN item (zero-risk). 10s undo (bigger surface area).
@@ -149,6 +182,7 @@ export default function Queue() {
                 <span className="effort-chip">⏱ {info.effort}</span>
               </>
             ); })()}
+            {(it.payload as any).approval_error && <div className="risk-impact">⚠ Draft generation failed: {(it.payload as any).approval_error}. Approval NOT completed — fix and re-approve.</div>}
             {it.payload.rationale && <details className="rationale-x"><summary>See Silk's full rationale</summary><p className="rationale">{it.payload.rationale}</p></details>}
             {it.payload.draft_id && drafts[it.payload.draft_id] && (
               <details className="draft"><summary>Attached draft ({drafts[it.payload.draft_id].kind})</summary><pre>{drafts[it.payload.draft_id].content}</pre></details>
