@@ -318,6 +318,16 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .draftcard .actions, .queue .actions { display: flex; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap; }
 .draftcard .actions .btn { flex: 1; min-width: 6rem; }
 .published p { margin: 0.3rem 0; } .rationale { font-size: 0.92rem; margin: 0.5rem 0; }
+/* Light-touch editing: live banner + demoted secondary actions */
+.live-banner { font-size: 0.86rem; background: rgba(80,200,120,0.08); border: 1px solid rgba(80,200,120,0.25); border-radius: 8px; padding: 0.5rem 0.65rem; margin: 0.4rem 0 0.2rem; line-height: 1.5; }
+.live-banner a { color: var(--verified); }
+.live-banner.editing { background: rgba(212,175,55,0.09); border-color: rgba(212,175,55,0.3); }
+.live-banner.editing strong { color: var(--gold); }
+.actions-secondary { display: flex; gap: 0.9rem; align-items: center; margin-top: 0.45rem; }
+.linklike { background: none; border: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 0.8rem; }
+.linklike:hover { color: var(--ink); }
+.linklike.danger:hover { color: var(--err); }
+.linklike:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
 .draft pre { white-space: pre-wrap; background: rgba(0,0,0,0.25); padding: 0.6rem; border-radius: 8px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.08); }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; padding: 1.2rem; z-index: 100; }
 .modal { width: min(24rem, 92vw); background: var(--bg-2); border: 1px solid var(--gold); border-radius: 14px; padding: 1.3rem; }

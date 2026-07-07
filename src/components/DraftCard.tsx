@@ -58,6 +58,10 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
 
   const isPublished = draft.status === 'published';
   const withinRetract = isPublished && draft.published_at && Date.now() - Date.parse(draft.published_at) < 15 * 60 * 1000;
+  // A page that is live (published) OR was published and is now being revised in place.
+  const wasPublished = !!draft.published_at && draft.status !== 'retracted';
+  const revisingLive = draft.status === 'edited' && wasPublished;   // live page, edits pending republish
+  const editable = draft.status !== 'retracted' && draft.status !== 'rejected';
 
   // Load prior version (for diff) + published stats.
   useEffect(() => {
@@ -169,6 +173,12 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
     catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   }
+  // Quick edit (no LLM): open the raw-markdown editor seeded with the CURRENT body, so a
+  // typo / wrong word / date fix is a direct inline edit saved instantly.
+  function startQuickEdit() {
+    setEditBody(stripFrontmatter(draft.markdown_body || ''));
+    setMode('edit');
+  }
   async function saveEdit() {
     setBusy('save');
     const { data: vers } = await supabase.from('corpus_draft_versions').select('version').eq('draft_id', draft.id).order('version', { ascending: false }).limit(1);
@@ -189,8 +199,19 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
       <div className="draft-query">{draft.target_query}</div>
       {draft.silk_explains && <div className="silk-explains">“{draft.silk_explains}”</div>}
 
-      {!isPublished && (() => {
-        const placeholders = [...new Set([...(draft.markdown_body ?? '').matchAll(/\[MAT:[^\]]*\]/g)].map((m) => m[0]))];
+      {isPublished && (
+        <div className="live-banner">
+          ● Live at <a href={draft.live_url ?? '#'} target="_blank" rel="noopener">{draft.live_url}</a>
+          <span className="muted small"> · published {String(draft.published_at).slice(0, 16).replace('T', ' ')}{stats && ` · ${stats.visits} visits · ${stats.cites} citing prompts`}</span>
+          <div className="muted small">Small fix? Quick Edit or Revise below — no need to retract.</div>
+        </div>
+      )}
+      {revisingLive && (
+        <div className="live-banner editing">✎ Revising a LIVE page — <strong>Publish update</strong> replaces it in place (same URL, new last-modified date). No retract/redraft needed.</div>
+      )}
+
+      {editable && (() => {
+        const placeholders = isPublished || revisingLive ? [] : [...new Set([...(draft.markdown_body ?? '').matchAll(/\[MAT:[^\]]*\]/g)].map((m) => m[0]))];
         return (
         <>
           {placeholders.length > 0 && (
@@ -281,29 +302,35 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             <button className="btn sm" disabled={!reviseNote.trim() || busy === 'revise'} onClick={doRevise}>{busy === 'revise' ? 'Revising…' : 'Revise'}</button>
           </div>
 
-          <div className="what-happens">
-            <span className="risk-dot risk-red" /> <strong>If published (RED):</strong> commits {draft.filename} to the svrhive-site repo, GitHub Actions builds the site, live at {draft.live_url} in ~1–2 min. Retract available for 15 minutes after publish.
-          </div>
+          {!isPublished && (
+            <div className="what-happens">
+              <span className="risk-dot risk-red" /> <strong>{revisingLive ? 'Publish update (RED):' : 'If published (RED):'}</strong>{' '}
+              {revisingLive
+                ? <>replaces the live page {draft.filename} in place — same URL ({draft.live_url}), refreshed content and last-modified date. Retract available for 15 minutes after.</>
+                : <>commits {draft.filename} to the svrhive-site repo, GitHub Actions builds the site, live at {draft.live_url} in ~1–2 min. Retract available for 15 minutes after publish.</>}
+            </div>
+          )}
+          {/* Primary actions — light-touch first: Quick Edit, Revise (row above), then Publish/Retract. */}
           <div className="actions">
-            <button className="btn sm" disabled={!!busy} onClick={() => setConfirm('publish')}>Publish</button>
-            <button className="btn sm ghost" disabled={!!busy} onClick={doReject}>Reject</button>
-            <button className="btn sm ghost" disabled={!!busy} onClick={doRegenerate}>{busy === 'regen' ? 'Regenerating…' : 'Regenerate'}</button>
+            <button className="btn sm" disabled={!!busy} onClick={startQuickEdit}>Quick Edit</button>
+            {isPublished
+              ? <button className="btn sm ghost" disabled={!!busy} onClick={() => setConfirm('retract')}>Retract</button>
+              : <button className="btn sm" disabled={!!busy} onClick={() => setConfirm('publish')}>{revisingLive ? 'Publish update' : 'Publish'}</button>}
+          </div>
+          {/* Secondary / demoted — reject only for never-published drafts. */}
+          <div className="actions-secondary small">
+            {!wasPublished && <button className="linklike danger" disabled={!!busy} onClick={doReject}>Reject</button>}
+            <button className="linklike" disabled={!!busy} onClick={doRegenerate}>{busy === 'regen' ? 'Regenerating…' : 'Regenerate from scratch'}</button>
           </div>
         </>
         );
       })()}
 
-      {isPublished && (
-        <div className="published">
-          <p>Live at <a href={draft.live_url ?? '#'} target="_blank" rel="noopener">{draft.live_url}</a></p>
-          <p className="muted small">
-            published {String(draft.published_at).slice(0, 16).replace('T', ' ')}
-            {stats && ` · ${stats.visits} visits · ${stats.cites} citing prompts`}
-          </p>
-          {withinRetract
-            ? <button className="btn sm ghost" disabled={!!busy} onClick={() => setConfirm('retract')}>Retract (15-min window)</button>
-            : <button className="btn sm ghost" disabled={!!busy} onClick={() => setConfirm('retract')}>Retract (past window)</button>}
-        </div>
+      {!editable && (
+        <p className="muted small" style={{ marginTop: '0.4rem' }}>
+          {draft.status === 'retracted' ? 'Retracted from the live site.' : 'Rejected.'}
+          {draft.mat_note ? ` — “${draft.mat_note}”` : ''}
+        </p>
       )}
 
       {msg && <p className="small" style={{ marginTop: '0.5rem' }}>{msg}</p>}
@@ -311,8 +338,8 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
       {confirm && (
         <div className="modal-backdrop" onClick={() => setConfirm(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <p><strong>{confirm === 'publish' ? 'Publish to silkvelvetrecords.com?' : 'Retract this page?'}</strong></p>
-            <p className="muted small">{confirm === 'publish' ? draft.live_url : 'Removes the note from the live site.'}</p>
+            <p><strong>{confirm === 'publish' ? (revisingLive ? 'Publish update to the live page?' : 'Publish to silkvelvetrecords.com?') : 'Retract this page?'}</strong></p>
+            <p className="muted small">{confirm === 'publish' ? (revisingLive ? `Updates ${draft.live_url} in place — same URL.` : draft.live_url) : 'Removes the note from the live site.'}</p>
             <div className="actions">
               <button className="btn" disabled={countdown > 0} onClick={confirm === 'publish' ? doPublish : doRetract}>
                 {countdown > 0 ? `${countdown}…` : confirm === 'publish' ? 'Publish now' : 'Retract now'}
