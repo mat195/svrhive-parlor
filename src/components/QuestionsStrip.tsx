@@ -17,6 +17,9 @@ interface Q {
 
 const OPEN_STATES = ['pending', 'open'];
 const draftKey = (id: string) => `qdraft:${id}`;
+// One-tap skip reasons → routed to the journal so the Question Hunter learns which
+// questions weren't worth asking.
+const SKIP_REASONS = ['not mine to answer', 'answered elsewhere', 'irrelevant now', 'other'];
 
 function ContextPreview({ ctx }: { ctx: any }) {
   if (!ctx || !ctx.type) return null;
@@ -53,6 +56,7 @@ export default function QuestionsStrip() {
   const [answering, setAnswering] = useState(false);
   const [answer, setAnswer] = useState('');
   const [showSrc, setShowSrc] = useState(false);
+  const [skipMenu, setSkipMenu] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [pending, setPending] = useState(0);
   const { pointAt, askSilk } = useSilk();
@@ -106,10 +110,17 @@ export default function QuestionsStrip() {
     // advance to the next question after the exit animation
     setTimeout(() => { setSelectedId(null); load(true); }, 220);
   }
-  async function dismiss() {
+  // Skip = a real terminal state (was only decrementing urgency, so the card never
+  // left). Marks status='skipped' + timestamp, journals the reason for Hunter tuning,
+  // drops the card, decrements the counter, and loads the next question in the slot.
+  async function skip(reason: string) {
     if (!current) return;
-    await supabase.from('silk_questions').update({ urgency: Math.max(0, current.urgency - 2) }).eq('id', current.id);
-    load(true);
+    const id = current.id, q = current.question;
+    setSkipMenu(false); setLeaving(true);
+    await supabase.from('silk_questions').update({ status: 'skipped', skipped_at: new Date().toISOString(), skip_reason: reason }).eq('id', id);
+    await supabase.from('silk_journal').insert({ entry: `Mat skipped "${q}" — reason: ${reason}. Question Hunter tuning: questions like this aren't worth asking.`, tags: ['question-skip', 'hunter-tuning', reason.replace(/\s+/g, '-')] });
+    localStorage.removeItem(draftKey(id));
+    setTimeout(() => { setSelectedId(null); load(true); }, 220);
   }
   function cancelAnswer() { setAnswering(false); if (pending > 0) load(true); }
 
@@ -152,7 +163,16 @@ export default function QuestionsStrip() {
             <div className="qacts">
               <button className="btn sm" onClick={() => setAnswering(true)}>Answer</button>
               <button className="btn sm ghost" onClick={() => askSilk(`About "${current.question}": `)}>Ask Silk</button>
-              <button className="btn sm ghost" onClick={dismiss} aria-label="Skip">Skip</button>
+              <div className="qskip">
+                <button className="btn sm ghost" onClick={() => setSkipMenu((m) => !m)} aria-haspopup="menu" aria-expanded={skipMenu} aria-label="Skip">Skip ▾</button>
+                {skipMenu && (
+                  <ul className="qskip-menu" role="menu">
+                    {SKIP_REASONS.map((r) => (
+                      <li key={r}><button role="menuitem" onClick={() => skip(r)}>{r}</button></li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
 

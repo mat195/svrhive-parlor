@@ -123,6 +123,10 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .qstrip-list li button { display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--ink); padding: 0.5rem 0.2rem; cursor: pointer; font-size: 0.86rem; }
 .qstrip-list li button:hover { background: rgba(255,255,255,0.03); }
 .qstrip-urg { font-size: 0.68rem; color: var(--gold); border: 1px solid rgba(201,169,97,0.3); border-radius: 999px; padding: 0.05rem 0.4rem; flex: none; }
+.qskip { position: relative; display: inline-block; }
+.qskip-menu { position: absolute; bottom: calc(100% + 4px); right: 0; z-index: 40; list-style: none; margin: 0; padding: 0.3rem; min-width: 11rem; background: var(--bg-2); border: 1px solid rgba(255,255,255,0.12); border-radius: 9px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.qskip-menu li button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); padding: 0.45rem 0.5rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
+.qskip-menu li button:hover { background: rgba(201,169,97,0.12); color: var(--gold); }
 @keyframes qstrip-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 @keyframes qstrip-out { to { opacity: 0; transform: translateX(14px); } }
 
