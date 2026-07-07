@@ -1,76 +1,61 @@
 // catalog-label-sweep (resumable worker) — sweeps LPT's primary catalog for the
-// Silk Velvet Records label (Spotify album label + copyright). Survives Spotify's
-// hard rate limits two ways: (1) a POOL of Spotify apps, each its own quota bucket —
-// on 429 it rotates to the next app's token mid-run and keeps going; (2) only when
-// EVERY app is rate-limited does it checkpoint next_attempt_at (to the SOONEST app
-// reset) and return; a cron resumes it. When complete it journals the SVR split,
-// files a §2 proposal, and pings Discord.
+// Silk Velvet Records label (Spotify album label + copyright) on a SINGLE Spotify app.
+//
+// Rate-limit strategy (single-app):
+//   1. BATCH to stay under the limit in the first place. Enumeration pages at limit=50;
+//      album labels are fetched via /v1/albums?ids=... (20 IDs per call), not one call
+//      per release. A ~55-release sweep is ~5 calls total, not ~60.
+//   2. THROTTLE — a small delay between calls so a burst never trips the window.
+//   3. BACKOFF + QUEUE (primary fallback) — if a 429 still hits, respect Spotify's
+//      Retry-After header (else exponential backoff), checkpoint next_attempt_at, and
+//      return; the hourly cron resumes from the checkpoint. Progress is never lost.
+//
+// When complete it journals the SVR split, files a §2 proposal, and pings Discord.
 import { admin, json, CORS } from '../_shared/auth.ts';
 
 const CRON_KEY = Deno.env.get('CRON_KEY') ?? '';
-// Spotify app pool: primary + any fallback apps. Each is a separate client-credentials
-// quota bucket, so when one is exhausted the next still serves. Add more by setting
-// SPOTIFY_CLIENT_ID_3/SECRET_3, etc., and appending here.
-const APPS = [
-  { id: Deno.env.get('SPOTIFY_CLIENT_ID') ?? '', secret: Deno.env.get('SPOTIFY_CLIENT_SECRET') ?? '' },
-  { id: Deno.env.get('SPOTIFY_CLIENT_ID_2') ?? '', secret: Deno.env.get('SPOTIFY_CLIENT_SECRET_2') ?? '' },
-].filter((a) => a.id && a.secret);
+const CID = Deno.env.get('SPOTIFY_CLIENT_ID') ?? '';
+const CSEC = Deno.env.get('SPOTIFY_CLIENT_SECRET') ?? '';
 const DISCORD = Deno.env.get('DISCORD_WEBHOOK_URL') ?? '';
 const LPT = '2lhuyLLQPcfoXSwcNaXuF1';
 const TASK = 'catalog-label-sweep';
-const BATCH = 15;
+const ALBUM_IDS_PER_CALL = 20;   // Spotify /v1/albums?ids= cap
+const MAX_BATCHES = 6;           // 6×20 = 120 albums/invocation — covers the whole catalog
+const THROTTLE_MS = 250;         // gentle spacing between calls
 
-type FetchResult = { data?: any; rateLimited?: boolean; retryAfter?: number };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function appToken(app: { id: string; secret: string }): Promise<string | null> {
+async function token(): Promise<string | null> {
   const r = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + btoa(`${app.id}:${app.secret}`) }, body: 'grant_type=client_credentials',
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + btoa(`${CID}:${CSEC}`) }, body: 'grant_type=client_credentials',
   });
   if (!r.ok) return null;
   return (await r.json()).access_token ?? null;
 }
 
-// Rotating client-credentials pool. fetch() tries each app not currently rate-limited;
-// on 429 it marks that app busy-until-reset and rotates to the next. Only when all apps
-// are busy does it surface rateLimited, with retryAfter = seconds until the SOONEST app
-// frees (so the checkpoint waits no longer than necessary).
-class SpotifyPool {
-  private toks: (string | null | undefined)[];
-  private busyUntil: number[]; // epoch ms each app is rate-limited until (0 = free)
-  constructor(private apps: { id: string; secret: string }[]) {
-    this.toks = apps.map(() => undefined);
-    this.busyUntil = apps.map(() => 0);
+type FetchResult = { data?: any; rateLimited?: boolean; retryAfter?: number };
+async function sfetch(url: string, tok: string): Promise<FetchResult> {
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${tok}` } });
+  if (r.status === 429) {
+    const ra = r.headers.get('retry-after');
+    return { rateLimited: true, retryAfter: ra ? parseInt(ra) : undefined }; // undefined → exponential
   }
-  get size() { return this.apps.length; }
-  private async tok(i: number): Promise<string | null> {
-    if (this.toks[i] === undefined) this.toks[i] = await appToken(this.apps[i]);
-    return this.toks[i] ?? null;
-  }
-  private soonestFreeSecs(): number {
-    const busy = this.busyUntil.filter((t) => t > 0);
-    if (!busy.length) return 3600;
-    return Math.max(1, Math.ceil((Math.min(...busy) - Date.now()) / 1000));
-  }
-  async fetch(url: string): Promise<FetchResult> {
-    for (let i = 0; i < this.apps.length; i++) {
-      if (this.busyUntil[i] > Date.now()) continue;      // known rate-limited → skip
-      const t = await this.tok(i);
-      if (!t) { this.busyUntil[i] = Date.now() + 3600_000; continue; } // auth fail → park an hour
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
-      if (r.status === 429) {
-        this.busyUntil[i] = Date.now() + parseInt(r.headers.get('retry-after') ?? '3600') * 1000;
-        continue;                                        // rotate to the next app
-      }
-      try { return { data: await r.json() }; } catch { return {}; }
-    }
-    return { rateLimited: true, retryAfter: this.soonestFreeSecs() }; // every app exhausted
-  }
+  try { return { data: await r.json() }; } catch { return {}; }
+}
+
+// Compute + store the next resume time. Respect Retry-After when present; otherwise back
+// off exponentially (30s, 60s, 120s, … capped at 1h) using a persisted attempt counter.
+function scheduleRetry(state: any, retryAfter?: number): string {
+  const wait = retryAfter ?? Math.min(3600, 30 * 2 ** (state.backoff ?? 0));
+  state.backoff = (state.backoff ?? 0) + 1;
+  state.next_attempt_at = new Date(Date.now() + (wait + 5) * 1000).toISOString();
+  return state.next_attempt_at;
 }
 
 async function loadCp() {
   const { data } = await admin.from('silk_task_checkpoints').select('*').eq('task', TASK).neq('status', 'done').order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (data) return data;
-  const { data: created } = await admin.from('silk_task_checkpoints').insert({ task: TASK, status: 'running', state: { enumerated: false, album_ids: [], results: {}, next_attempt_at: null } }).select('*').single();
+  const { data: created } = await admin.from('silk_task_checkpoints').insert({ task: TASK, status: 'running', state: { enumerated: false, album_ids: [], results: {}, next_attempt_at: null, backoff: 0 } }).select('*').single();
   return created;
 }
 const save = (id: string, state: any, extra: Record<string, unknown> = {}) => admin.from('silk_task_checkpoints').update({ state, updated_at: new Date().toISOString(), ...extra }).eq('id', id);
@@ -84,46 +69,54 @@ Deno.serve(async (req) => {
   if (state.next_attempt_at && Date.now() < Date.parse(state.next_attempt_at)) {
     return json({ ok: true, waiting: true, until: state.next_attempt_at });
   }
-  const pool = new SpotifyPool(APPS);
-  if (!pool.size) return json({ error: 'no spotify apps configured' }, 502);
+  const tok = await token();
+  if (!tok) return json({ error: 'spotify auth failed' }, 502);
 
-  // 1) Enumerate the primary catalog once.
+  // 1) Enumerate the primary catalog once — page at limit=50 (5× fewer pages than limit=10).
   if (!state.enumerated) {
     const ids: string[] = []; const seen = new Set<string>();
     for (const grp of ['album', 'single']) {
       let off = 0;
       while (true) {
-        const r = await pool.fetch(`https://api.spotify.com/v1/artists/${LPT}/albums?include_groups=${grp}&market=US&limit=10&offset=${off}`);
-        if (r.rateLimited) { state.next_attempt_at = new Date(Date.now() + (r.retryAfter! + 5) * 1000).toISOString(); await save(cp.id, state, { note: 'rate-limited during enumeration' }); return json({ ok: true, waiting: true, until: state.next_attempt_at }); }
+        const r = await sfetch(`https://api.spotify.com/v1/artists/${LPT}/albums?include_groups=${grp}&market=US&limit=50&offset=${off}`, tok);
+        if (r.rateLimited) { const until = scheduleRetry(state, r.retryAfter); await save(cp.id, state, { note: 'rate-limited during enumeration' }); return json({ ok: true, waiting: true, until }); }
         const items = r.data?.items ?? [];
         for (const a of items) if (!seen.has(a.id) && (a.artists ?? []).some((x: any) => x.id === LPT)) { seen.add(a.id); ids.push(a.id); }
-        if (items.length < 10) break; off += 10;
+        if (items.length < 50) break; off += 50;
+        await sleep(THROTTLE_MS);
       }
     }
-    state.album_ids = ids; state.enumerated = true; state.next_attempt_at = null;
+    state.album_ids = ids; state.enumerated = true; state.backoff = 0; state.next_attempt_at = null;
     await save(cp.id, state);
   }
 
-  // 2) Fetch album labels in a bounded batch; checkpoint on rate limit.
+  // 2) Fetch album labels in BATCHES of 20 via /v1/albums?ids=... (not one call per album).
+  //    Results are keyed by the requested id (response order matches request order, null =
+  //    missing) so every id resolves and `remaining` always converges.
   const todo = (state.album_ids as string[]).filter((id) => !state.results[id]);
   let processed = 0;
-  for (const id of todo) {
-    if (processed >= BATCH) break;
-    const r = await pool.fetch(`https://api.spotify.com/v1/albums/${id}`);
-    if (r.rateLimited) { state.next_attempt_at = new Date(Date.now() + (r.retryAfter! + 5) * 1000).toISOString(); await save(cp.id, state, { note: `rate-limited; ${todo.length - processed} albums left` }); return json({ ok: true, waiting: true, until: state.next_attempt_at, remaining: todo.length - processed }); }
-    const al = r.data ?? {};
-    const cr = (al.copyrights ?? []).map((c: any) => c.text).join(' | ');
-    state.results[id] = { title: al.name, date: al.release_date, label: al.label ?? null, cr, svr: /silk\s*velvet/i.test(`${al.label ?? ''} ${cr}`) };
-    processed++;
+  for (let b = 0; b < MAX_BATCHES && processed < todo.length; b++) {
+    const chunk = todo.slice(processed, processed + ALBUM_IDS_PER_CALL);
+    const r = await sfetch(`https://api.spotify.com/v1/albums?ids=${chunk.join(',')}&market=US`, tok);
+    if (r.rateLimited) { const until = scheduleRetry(state, r.retryAfter); await save(cp.id, state, { note: `rate-limited; ${todo.length - processed} albums left` }); return json({ ok: true, waiting: true, until, remaining: todo.length - processed }); }
+    const albums = r.data?.albums ?? [];
+    chunk.forEach((id, i) => {
+      const al = albums[i];
+      if (!al?.id) { state.results[id] = { missing: true, svr: false }; return; }
+      const cr = (al.copyrights ?? []).map((c: any) => c.text).join(' | ');
+      state.results[id] = { title: al.name, date: al.release_date, label: al.label ?? null, cr, svr: /silk\s*velvet/i.test(`${al.label ?? ''} ${cr}`) };
+    });
+    processed += chunk.length;
+    await sleep(THROTTLE_MS);
   }
-  state.next_attempt_at = null;
+  state.backoff = 0; state.next_attempt_at = null;
   await save(cp.id, state);
 
   const remaining = (state.album_ids as string[]).filter((id) => !state.results[id]).length;
   if (remaining > 0) return json({ ok: true, done: false, processed, remaining });
 
   // 3) Complete — compile, journal, propose §2 update, ping Discord.
-  const res = Object.values(state.results) as any[];
+  const res = (Object.values(state.results) as any[]).filter((r) => !r.missing);
   const yes = res.filter((r) => r.svr).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
   const no = res.filter((r) => !r.svr);
   await admin.from('silk_task_checkpoints').update({ status: 'done', note: `${res.length} releases · ${yes.length} SVR`, updated_at: new Date().toISOString() }).eq('id', cp.id);
