@@ -82,6 +82,11 @@ export const SILK_TOOLS = [
     description: 'Reconcile citations-vs-mentions across the AI visibility battery: how many cells NAMED Lucius P. Thundercat vs how many cited sources, how many distinct domains engines cite, whether any LPT-OWNED domain (silkvelvetrecords.com / open.spotify.com) is ever cited, and the top cited domains. Use for questions about where AI engines source answers about LPT and whether his own pages get cited.',
     input_schema: { type: 'object', properties: {} },
   },
+  {
+    name: 'query_database',
+    description: 'Run a READ-ONLY SQL query (SELECT / WITH) against the app database and get rows back as JSON. This is your DEFAULT way to check what is actually in ANY table — current or future — instead of guessing or asking. You can SELECT from and JOIN any application table (e.g. action_queue, corpus_drafts, visibility_runs, visibility_results, metrics_snapshots, silk_task_checkpoints, entity_facts, silk_journal, parlor_messages, silk_config). If you do NOT know the exact table or column names, first discover them by querying information_schema.tables / information_schema.columns, then query the data — you never need to be told a table name in advance. Rules: one statement, SELECT/WITH only (no INSERT/UPDATE/DELETE — those go through queue_for_approval), results capped at 1000 rows so use WHERE/LIMIT/ORDER BY, and no access to credentials or secrets (auth.* / vault.* are blocked).',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'A single read-only SQL statement (SELECT or WITH ...). Use fully-qualified names like public.silk_task_checkpoints when helpful.' } }, required: ['query'] },
+  },
 ];
 
 let _spotifyToken: { token: string; exp: number } | null = null;
@@ -244,6 +249,7 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
     if (name === 'ledger_query_drafts') return await ledger('corpus_drafts', 'target_query, status, filename, live_url', limit);
     if (name === 'ledger_query_web_fetches') return await ledger('web_fetch_cache', 'url, status, fetched_at', limit);
     if (name === 'citation_reconciliation') { const { data, error } = await admin.rpc('citation_reconciliation'); return error ? { error: error.message } : data; }
+    if (name === 'query_database') { const { data, error } = await admin.rpc('query_database', { query: String(input.query ?? '') }); return error ? { error: error.message } : data; }
     return { error: `unknown tool ${name}` };
   } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
 }
