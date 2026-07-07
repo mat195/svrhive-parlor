@@ -33,7 +33,7 @@ function approvalInfo(it: QueueItem): { what: string; effort: string } {
   if (k === 'entity-submission')
     return { what: `Generates/updates a paste-ready kit (MusicBrainz / Wikidata / etc.) in Workshop → Listings. Nothing submits externally until you use the guided paste wizard.`, effort: '~2 min' };
   if (k === 'doctrine-sync' || k === 'weekly-consolidation')
-    return { what: `Updates SILK_IDENTITY.md doctrine (runtime + repo). Changes how Silk behaves going forward. Reversible; old version archived in doctrine_versions.`, effort: '~1 min' };
+    return { what: `Updates Silk's rules (runtime + rulebook). Changes how Silk behaves going forward. Reversible; the old version is archived in the rule history.`, effort: '~1 min' };
   if (k === 'bio-approval' || k === 'bio-revision')
     return { what: `Updates the bio (queued, not published). It flows to the entity master; the public site only changes if you later publish it.`, effort: '~1 min' };
   if (k === 'tier-reclass')

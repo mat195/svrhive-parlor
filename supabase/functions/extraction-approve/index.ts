@@ -79,14 +79,15 @@ Deno.serve(async (req) => {
       proofs.push(p1.detail, p2.detail);
       routed = 'entity_master';
     } else if (x.extraction_type === 'preference' || x.extraction_type === 'correction') {
-      // Doctrine → runtime identity (immediate effect) + repo-sync queue item.
+      // Rules → runtime identity (immediate effect). The repo-sync reminder is
+      // BOOKKEEPING (config-to-file), so it goes to the JOURNAL, never Mat's queue.
       const ok = await appendDoctrine(canonical);
-      await admin.from('action_queue').insert({
-        kind: 'doctrine-sync', status: 'proposed',
-        payload: { title: 'Persist learned doctrine to SILK_IDENTITY.md', rationale: `From chat: "${canonical}"\n\nAlready live in the runtime identity (silk_config). This queue item is a reminder to write it into the repo file so it survives the next full config sync.`, doctrine_line: canonical, extraction_id: x.id },
+      await admin.from('silk_journal').insert({
+        entry: `[rules-sync] Learned rule live in runtime identity (silk_config): "${canonical}". Claude Code should persist it into skills/SILK_IDENTITY.md on the next config sync.`,
+        tags: ['rules-sync', 'bookkeeping', 'auto-routed'],
       });
-      proofs.push(ok ? 'doctrine appended to runtime identity (silk_config)' : 'doctrine append FAILED');
-      routed = 'doctrine';
+      proofs.push(ok ? 'rule appended to runtime identity (silk_config); repo-sync journaled' : 'rule append FAILED');
+      routed = 'rules';
     } else {
       // instinct / question → silk_questions (pending) for the Question Hunter.
       const qIns = await admin.from('silk_questions').insert({

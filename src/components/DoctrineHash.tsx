@@ -11,8 +11,8 @@ export default function DoctrineHash() {
   }, []);
   if (!hash) return null;
   return (
-    <div className="doctrine-hash" title="Runtime SILK_IDENTITY.md version bound to every Silk call">
-      doctrine <code>{hash}</code>
+    <div className="doctrine-hash" title="Silk's runtime rules version, bound to every Silk response">
+      Rules: <code>{hash}</code>
     </div>
   );
 }

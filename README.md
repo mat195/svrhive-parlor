@@ -1,27 +1,27 @@
 # svrhive-parlor — the Parlor
 
-> ## Doctrine — Silk's chat is one continuous conversation
+> ## Rules — Silk's chat is one continuous conversation
 > Silk's chat is **one continuous conversation across the entire Parlor
 > experience.** State persists through navigation, session end, and browser
 > restart (hoisted to `SilkProvider`, backed by `parlor_chats`/`parlor_messages`,
 > active chat pinned in localStorage). **Only Mat explicitly starting a New chat
 > resets it.**
 
-> ## Doctrine — web-fetch is research infrastructure
+> ## Rules — web-fetch is research infrastructure
 > Silk's `web-fetch` reads **public data at scale so Mat doesn't paste it
 > manually.** Every research task that could hit public data must go through
 > web-fetch **first**. It is GET-only, allowlisted, cached (24h), rate-limited,
 > robots-aware, and **fully audited** (`web_fetches`) — every fetch is auditable,
 > always. Owner-only invocation; a CI guard blocks any non-GET verb in its source.
 
-> ## Doctrine — answers are teaching moments
+> ## Rules — answers are teaching moments
 > Every answer Mat gives is a **teaching moment for Silk, not a row update.** The
 > system's job is to make sure Silk **retains, propagates, and gets smarter from
 > every answer — automatically.** Each answer appends to `mat_answers`, triggers a
 > propagation cascade (`answer-propagate` → one review queue item + a journal
 > entry), and feeds the weekly Answer Digest ("what Mat taught me").
 
-> ## Site Growth Doctrine
+> ## Site Growth Rules
 > `silkvelvetrecords.com` stays **intentionally minimal** for the current phase. It
 > exists to serve **AI answer engines, Google/Bing indexing, and as the authority
 > reference URL for entity-database submissions.** Human-facing UX polish is
@@ -42,7 +42,7 @@
 > **Silk never proposes site-expansion features unprompted** — corpus pages, yes;
 > new sections, no, until Mat green-lights.
 
-> ## Doctrine — the work happens in the Parlor
+> ## Rules — the work happens in the Parlor
 > Every SVRHIVE capability defaults to a **Parlor UI** unless there's a
 > compelling reason not to. Approval, publishing, editing, monitoring — all
 > inside `hive.silkvelvetrecords.com`. No context-switching to GitHub, DNS
@@ -50,7 +50,7 @@
 > constraint**, not a nice-to-have. Silk is the hands; Mat is the will — Silk
 > never acts unilaterally, and a Mat click IS the human action.
 
-> ## Doctrine — Realtime never interrupts in-flight input
+> ## Rules — Realtime never interrupts in-flight input
 > Realtime updates in the Parlor never interrupt in-flight user input. Any
 > component that both subscribes to Realtime and hosts an input field MUST
 > implement the **lock-while-answering** pattern: while an input is focused/active,
@@ -164,7 +164,7 @@ bundle to enforce this (`npm run check:secrets`).
 - **Edge Function:** verifies the caller's JWT email == owner (401 otherwise),
   rate-limited per minute, `max_tokens` capped.
 
-> ## Doctrine — verified RLS on every write path
+> ## Rules — verified RLS on every write path
 > **Every write path in SVRHIVE must have verified RLS policies on the target table
 > before the write is trusted.** Silent policy failures are the same class of harm as
 > verification-wrapper failures — success reported without state change. Both classes
