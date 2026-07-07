@@ -13,7 +13,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
 import { runToolLoop } from '../_shared/tools.ts';
-import { asksForFetchable, usedFetchTool, verifyBeforeDone, needsReformat, reformat } from '../_shared/response_gates.ts';
+import { asksForFetchable, usedFetchTool, verifyBeforeDone, needsReformat, reformat, shouldSelfVerify, selfVerify } from '../_shared/response_gates.ts';
 import { loadConfig } from '../_shared/silk.ts';
 
 const OWNER_EMAIL = 'matc195@gmail.com';
@@ -194,14 +194,27 @@ Deno.serve(async (req) => {
   const identityHash = built.identityHash;
   const assemblyId = built.assemblyId;
 
-  const system =
-    resolutionBlock + openLoopsBlock + sessionLog +
-    built.system +
+  const operatingRules =
     '\n\n--- OPERATING RULES (Parlor) ---\n' +
     'Answer ONLY from the layered context above plus general knowledge that does not assert facts about Lucius P. Thundercat / Silk Velvet Records.\n' +
     'PROVENANCE: if your context does not contain the answer, say so plainly — do not invent. Never fabricate metrics, mentions, or facts about the artist/label.\n' +
     'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.\n' +
     'AGENT LOOP: when you propose a concrete action (draft a corpus page, run an audit, apply a fix), call the queue_for_approval tool to FILE it — that pins it as the open loop so Mat\'s next "approve"/"yes" resolves against it and it executes. Do not just describe an action you could take; file it.';
+
+  // Prompt caching (P1-5): the STABLE prefix (L1 identity + L2 facts + L3 skills) is
+  // identical across turns of a task → mark it cache_control:ephemeral so Anthropic
+  // caches it and only the DYNAMIC tail (session state + open loops + memory + ledger +
+  // rules) is re-read each turn. The session block leads the dynamic tail so it stays
+  // prominent (always-present, right after the cached prefix), never budget-dropped.
+  const dynamicText = resolutionBlock + openLoopsBlock + sessionLog + built.dynamic + operatingRules;
+  const system: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
+    { type: 'text', text: built.stable, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: dynamicText },
+  ];
+  const sourcingSystem = [
+    system[0],
+    { type: 'text' as const, text: dynamicText + '\n\n--- SOURCING GATE (enforced) ---\nYou just asked Mat for data you can fetch yourself. Use the appropriate tool (web_fetch / spotify_* / read_config_file / ledger_query_* / journal_retrieve) NOW and answer from the result. Only ask Mat if the tool genuinely fails.' },
+  ];
 
   // Chat continuity: load the prior turns so Silk remembers the conversation (the
   // client already persisted the current user message before calling us). Without this
@@ -246,7 +259,7 @@ Deno.serve(async (req) => {
         // P1-4 SOURCING gate: asked Mat for fetchable data without trying a tool → force one attempt.
         if (asksForFetchable(text) && !usedFetchTool(toolTrace)) {
           const fix = await runToolLoop({
-            system: system + '\n\n--- SOURCING GATE (enforced) ---\nYou just asked Mat for data you can fetch yourself. Use the appropriate tool (web_fetch / spotify_* / read_config_file / ledger_query_* / journal_retrieve) NOW and answer from the result. Only ask Mat if the tool genuinely fails.',
+            system: sourcingSystem,
             history, model, anthropicKey: ANTHROPIC_API_KEY, callerJwt: jwt, maxTokens: built.maxTokens,
           });
           if (fix.text && usedFetchTool(fix.toolTrace)) { text = fix.text; toolTrace = [...toolTrace, ...fix.toolTrace]; }
@@ -255,6 +268,15 @@ Deno.serve(async (req) => {
         const vbd = verifyBeforeDone(text, toolTrace);
         if (vbd.softened) await admin.from('silk_journal').insert({ entry: `[gate] Softened an unverified state-change claim in chat (no confirmation tool ran this turn).`, tags: ['gate', 'verify-before-done'] });
         full = vbd.text;
+        // P2-6 SELF-VERIFICATION: cheap second model audits factual claims about the
+        // artist/label/metrics against the tool evidence; hedges any it can't source.
+        if (shouldSelfVerify(full, toolTrace)) {
+          const sv = await selfVerify(full, toolTrace, ANTHROPIC_API_KEY);
+          if (sv.softened) {
+            full = sv.text;
+            await admin.from('silk_journal').insert({ entry: `[gate] Self-verification hedged ${sv.unsupported.length} unsupported factual claim(s): ${sv.unsupported.map((s) => s.slice(0, 80)).join(' | ')}`, tags: ['gate', 'self-verify'] });
+          }
+        }
         // P1-4 FORMAT gate: long / §-referencing replies → decision-first reformat (cheap model).
         if (needsReformat(full)) {
           full = await reformat(full, ANTHROPIC_API_KEY, (await loadConfig('skill:format-for-human')).value);

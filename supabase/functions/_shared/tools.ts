@@ -249,7 +249,7 @@ export interface ToolLoopResult { text: string; toolTrace: { name: string; input
  * Returns the final assistant text once Claude stops requesting tools.
  */
 export async function runToolLoop(opts: {
-  system: string; model: string; anthropicKey: string; callerJwt: string;
+  system: string | unknown[]; model: string; anthropicKey: string; callerJwt: string;
   userText?: string; history?: { role: string; content: unknown }[];
   maxTokens?: number; maxTurns?: number; tools?: typeof SILK_TOOLS;
 }): Promise<ToolLoopResult> {

@@ -75,7 +75,7 @@ export interface BuildInput {
   ledgerSnapshot?: string;  // compact current-state (L5), never the bulk ledger
 }
 export interface BuildOutput {
-  system: string; identityHash: string; assemblyId: string | null;
+  system: string; stable: string; dynamic: string; identityHash: string; assemblyId: string | null;
   taskType: string; skillsLoaded: string[]; entriesRetrieved: string[]; maxTokens: number;
 }
 
@@ -131,15 +131,20 @@ export async function buildSystemPrompt(input: BuildInput): Promise<BuildOutput>
   const seen = new Set<string>(); const memShown: typeof memEntries = [];
   for (const e of memEntries) { if (seen.has(e.id)) continue; seen.add(e.id); memShown.push(e); if (memShown.length >= 12) break; }
 
-  // Assemble in layer order.
-  const system = [
+  // STABLE layers (L1 identity + L2 facts + L3 skills) — identical across turns of a
+  // task, so they're the prompt-cache prefix. DYNAMIC layers (L4 memory + L5 ledger)
+  // change per message and follow the cached prefix.
+  const stable = [
     identity,
     `\n\n--- LAYER 2 · CANONICAL FACTS (Lucius P. Thundercat entity master) ---\n${entityMaster}`,
     skillBodies.length ? `\n\n--- LAYER 3 · ACTIVE SKILLS (task: ${[...taskTypes].join(', ')}) ---\n${skillBodies.join('\n\n')}` : '',
+  ].filter(Boolean).join('');
+  const dynamic = [
     memShown.length ? `\n\n--- LAYER 4 · RELEVANT MEMORY (retrieved from your journal — not the whole history) ---\n${memShown.map((e) => `[${e.tag}] ${e.line}`).join('\n')}` : '',
     `\n\n--- LAYER 5 · LEDGER ACCESS (queried, not loaded) ---\nRaw observations live in the ledger. You can request: ${LEDGER_FUNCTIONS.join(', ')}. Do not assume ledger facts you have not been shown.` +
       (ledgerSnapshot ? `\nCurrent snapshot:\n${ledgerSnapshot}` : ''),
   ].filter(Boolean).join('');
+  const system = stable + dynamic;
 
   // Record the assembly (traceability: what Silk was thinking with).
   let assemblyId: string | null = null;
@@ -155,5 +160,5 @@ export async function buildSystemPrompt(input: BuildInput): Promise<BuildOutput>
     assemblyId = data?.id ?? null;
   } catch { /* audit is best-effort; never blocks a response */ }
 
-  return { system, identityHash, assemblyId, taskType, skillsLoaded: skillNames, entriesRetrieved: memShown.map((e) => e.id), maxTokens: maxTokensFor(taskTypes, message) };
+  return { system, stable, dynamic, identityHash, assemblyId, taskType, skillsLoaded: skillNames, entriesRetrieved: memShown.map((e) => e.id), maxTokens: maxTokensFor(taskTypes, message) };
 }
