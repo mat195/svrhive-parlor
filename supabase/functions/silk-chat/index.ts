@@ -13,6 +13,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
 import { runToolLoop } from '../_shared/tools.ts';
+import { asksForFetchable, usedFetchTool, verifyBeforeDone } from '../_shared/response_gates.ts';
 
 const OWNER_EMAIL = 'matc195@gmail.com';
 const CHEAP_MODEL = 'claude-haiku-4-5-20251001';
@@ -178,6 +179,14 @@ Deno.serve(async (req) => {
     : '';
   const resolutionBlock = resolutionNote ? `--- LOOP RESOLUTION (act on this) ---\n${resolutionNote}\n\n` : '';
 
+  // L-session (P1-5): current-session truth — the session log — ALWAYS at the very top,
+  // before any retrieval. This is truth, never from vector recall.
+  let sessionLog = '';
+  if (body.chat_id) {
+    const { data: evs } = await admin.from('silk_session_events').select('event_type, description').eq('session_id', sessionId).order('created_at', { ascending: false }).limit(10);
+    if (evs?.length) sessionLog = `--- THIS SESSION (log — current-session truth, not memory) ---\n${evs.reverse().map((e) => `• [${e.event_type}] ${e.description}`).join('\n')}\n\n`;
+  }
+
   // Route through the five-layer retrieval assembly (Brief Seven). ctx becomes the
   // compact L5 current-state snapshot; the builder handles L1-L4 + records the assembly.
   const built = await buildSystemPrompt({ surface: 'silk-chat', message, callId: body.chat_id, taskTypeHint: 'chat', ledgerSnapshot: ctx });
@@ -185,7 +194,7 @@ Deno.serve(async (req) => {
   const assemblyId = built.assemblyId;
 
   const system =
-    resolutionBlock + openLoopsBlock +
+    resolutionBlock + openLoopsBlock + sessionLog +
     built.system +
     '\n\n--- OPERATING RULES (Parlor) ---\n' +
     'Answer ONLY from the layered context above plus general knowledge that does not assert facts about Lucius P. Thundercat / Silk Velvet Records.\n' +
@@ -227,11 +236,25 @@ Deno.serve(async (req) => {
         // Tool-use loop (Brief Three→Seven): Claude can call web_fetch / journal_retrieve
         // / ledger_query mid-response instead of asking Mat for retrievable data.
         // max_tokens is task-classified by the builder (err upward — truncation is worse).
-        const { text, toolTrace, stopReason } = await runToolLoop({
+        const r0 = await runToolLoop({
           system, history, model, anthropicKey: ANTHROPIC_API_KEY,
           callerJwt: jwt, maxTokens: built.maxTokens,
         });
-        full = text;
+        let text = r0.text; let toolTrace = r0.toolTrace; const stopReason = r0.stopReason;
+
+        // P1-4 SOURCING gate: asked Mat for fetchable data without trying a tool → force one attempt.
+        if (asksForFetchable(text) && !usedFetchTool(toolTrace)) {
+          const fix = await runToolLoop({
+            system: system + '\n\n--- SOURCING GATE (enforced) ---\nYou just asked Mat for data you can fetch yourself. Use the appropriate tool (web_fetch / spotify_* / read_config_file / ledger_query_* / journal_retrieve) NOW and answer from the result. Only ask Mat if the tool genuinely fails.',
+            history, model, anthropicKey: ANTHROPIC_API_KEY, callerJwt: jwt, maxTokens: built.maxTokens,
+          });
+          if (fix.text && usedFetchTool(fix.toolTrace)) { text = fix.text; toolTrace = [...toolTrace, ...fix.toolTrace]; }
+        }
+        // P1-4 VERIFY-BEFORE-DONE gate: soften unbacked state-change claims.
+        const vbd = verifyBeforeDone(text, toolTrace);
+        if (vbd.softened) await admin.from('silk_journal').insert({ entry: `[gate] Softened an unverified state-change claim in chat (no confirmation tool ran this turn).`, tags: ['gate', 'verify-before-done'] });
+        full = vbd.text;
+
         if (toolTrace.length) {
           sse(controller, 'tools', { used: toolTrace.map((t) => t.name) });
           // Session log (P0-1): current-session truth, append-only — never from retrieval.
