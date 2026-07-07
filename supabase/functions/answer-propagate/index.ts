@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
   // 2. file ONE cascade queue item (single approval, not many).
   await admin.from('action_queue').insert({
-    kind: 'answer-cascade', status: 'proposed',
+    kind: 'answer-cascade', status: 'proposed', risk_tier: 'amber',
     payload: {
       title: `Answer → review ${surfaces.length} surface${surfaces.length > 1 ? 's' : ''}`,
       rationale: `You answered: "${q.question}" → "${body.answer}".\nThis updates entity-master field "${field}" and should propagate to:\n${surfaces.map((s) => '• ' + s).join('\n')}\n\nApprove to authorize the cascade (the builder applies the edits + regenerates affected kits/pages). Reject if it shouldn't propagate.`,

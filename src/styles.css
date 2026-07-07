@@ -156,6 +156,26 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .morning-card { display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; background: rgba(185,139,214,0.08); border: 1px solid rgba(185,139,214,0.3); border-radius: 12px; padding: 0.7rem 0.9rem; color: var(--ink); cursor: pointer; font-size: 0.9rem; margin-bottom: 0.4rem; }
 .morning-dot { color: #b98bd6; }
 .init-tag { color: #b98bd6; font-size: 0.66rem; }
+
+/* Queue risk tiers */
+.risk-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; vertical-align: middle; }
+.risk-green { background: #8fd19e; box-shadow: 0 0 6px rgba(143,209,158,0.5); }
+.risk-amber { background: #e0b34f; box-shadow: 0 0 6px rgba(224,179,79,0.5); }
+.risk-red { background: #e0554f; box-shadow: 0 0 6px rgba(224,85,79,0.5); }
+.risk-grey { background: #9a9a9a; }
+.risk-label { font-size: 0.72rem; margin: 0.15rem 0 0.3rem; }
+.risk-label.risk-green { color: #8fd19e; } .risk-label.risk-amber { color: #e0b34f; }
+.risk-label.risk-red { color: #e0554f; } .risk-label.risk-grey { color: var(--muted); }
+.risk-impact { font-size: 0.76rem; color: #e0554f; background: rgba(224,85,79,0.08); border: 1px solid rgba(224,85,79,0.25); border-radius: 7px; padding: 0.35rem 0.55rem; margin-bottom: 0.4rem; }
+.risk-card-red { border-left: 2px solid rgba(224,85,79,0.5); }
+.risk-card-amber { border-left: 2px solid rgba(224,179,79,0.35); }
+.risk-card-green { border-left: 2px solid rgba(143,209,158,0.35); }
+.what-happens { font-size: 0.84rem; color: var(--ink); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 0.5rem 0.65rem; margin: 0.4rem 0 0.35rem; line-height: 1.45; }
+.what-happens strong { color: var(--gold); }
+.effort-chip { display: inline-block; font-size: 0.7rem; color: var(--muted); border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 0.1rem 0.5rem; }
+.rationale-x { margin-top: 0.5rem; }
+.rationale-x summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; }
+.rationale-x .rationale { margin-top: 0.4rem; }
 @keyframes qstrip-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 @keyframes qstrip-out { to { opacity: 0; transform: translateX(14px); } }
 

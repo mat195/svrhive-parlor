@@ -156,6 +156,9 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             </div>
           )}
 
+          <div className="what-happens">
+            <span className="risk-dot risk-red" /> <strong>If published (RED):</strong> commits {draft.filename} to the svrhive-site repo, GitHub Actions builds the site, live at {draft.live_url} in ~1–2 min. Retract available for 15 minutes after publish.
+          </div>
           <div className="actions">
             <button className="btn sm" disabled={!!busy} onClick={() => setConfirm('publish')}>Publish</button>
             <button className="btn sm ghost" disabled={!!busy} onClick={doReject}>Reject</button>

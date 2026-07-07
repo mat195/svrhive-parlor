@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
   const nP = out.promotions?.length ?? 0, nD = out.doctrine_additions?.length ?? 0, nA = out.archive_candidates?.length ?? 0;
   const { data: qi } = await admin.from('action_queue').insert({
-    kind: 'weekly-consolidation', status: 'proposed',
+    kind: 'weekly-consolidation', status: 'proposed', risk_tier: 'amber',
     payload: {
       title: `Weekly consolidation — ${nP} promotion${nP !== 1 ? 's' : ''}, ${nD} doctrine, ${nA} to archive`,
       rationale: out.summary, promotions: out.promotions, doctrine_additions: out.doctrine_additions,

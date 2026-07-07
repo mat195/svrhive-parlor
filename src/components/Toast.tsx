@@ -5,17 +5,17 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 // given, an Undo button runs it and dismisses.
 interface Toast { id: number; message: string; undo?: () => void | Promise<void> }
 
-const Ctx = createContext<{ toast: (message: string, undo?: () => void | Promise<void>) => void } | null>(null);
+const Ctx = createContext<{ toast: (message: string, undo?: () => void | Promise<void>, durationMs?: number) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
-  const toast = useCallback((message: string, undo?: () => void | Promise<void>) => {
+  const toast = useCallback((message: string, undo?: () => void | Promise<void>, durationMs = 5000) => {
     const id = nextId.current++;
     setToasts((t) => [...t, { id, message, undo }]);
-    setTimeout(() => dismiss(id), 5000);
+    setTimeout(() => dismiss(id), durationMs);
   }, [dismiss]);
 
   return (
