@@ -13,7 +13,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
 import { runToolLoop } from '../_shared/tools.ts';
-import { asksForFetchable, usedFetchTool, verifyBeforeDone } from '../_shared/response_gates.ts';
+import { asksForFetchable, usedFetchTool, verifyBeforeDone, needsReformat, reformat } from '../_shared/response_gates.ts';
+import { loadConfig } from '../_shared/silk.ts';
 
 const OWNER_EMAIL = 'matc195@gmail.com';
 const CHEAP_MODEL = 'claude-haiku-4-5-20251001';
@@ -254,6 +255,12 @@ Deno.serve(async (req) => {
         const vbd = verifyBeforeDone(text, toolTrace);
         if (vbd.softened) await admin.from('silk_journal').insert({ entry: `[gate] Softened an unverified state-change claim in chat (no confirmation tool ran this turn).`, tags: ['gate', 'verify-before-done'] });
         full = vbd.text;
+        // P1-4 FORMAT gate: long / §-referencing replies → decision-first reformat (cheap model).
+        if (needsReformat(full)) {
+          full = await reformat(full, ANTHROPIC_API_KEY, (await loadConfig('skill:format-for-human')).value);
+        }
+        // Never ship an empty reply (heavy agent loops can exhaust their turn budget).
+        if (!full.trim()) full = "I ran long on that one and didn't finish cleanly — ask me for one specific piece and I'll nail it.";
 
         if (toolTrace.length) {
           sse(controller, 'tools', { used: toolTrace.map((t) => t.name) });
