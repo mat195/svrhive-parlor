@@ -164,6 +164,15 @@ bundle to enforce this (`npm run check:secrets`).
 - **Edge Function:** verifies the caller's JWT email == owner (401 otherwise),
   rate-limited per minute, `max_tokens` capped.
 
+> ## Doctrine — verified RLS on every write path
+> **Every write path in SVRHIVE must have verified RLS policies on the target table
+> before the write is trusted.** Silent policy failures are the same class of harm as
+> verification-wrapper failures — success reported without state change. Both classes
+> route through the same discipline: **verify state after write, always.** Every new
+> table ships with RLS enabled and the correct owner policies, asserted in CI
+> (`node scripts/check-rls.mjs`, wired into the deploy workflow) — a missing or silent
+> policy fails the build.
+
 ## Commands
 
 ```bash

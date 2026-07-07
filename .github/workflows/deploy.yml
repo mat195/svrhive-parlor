@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
 
+      - name: RLS policy check (fails build on missing/silent policies)
+        run: node scripts/check-rls.mjs
+
       - name: Build
         env:
           # Public values (safe in the bundle): the anon key is protected by RLS.

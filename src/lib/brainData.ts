@@ -32,7 +32,9 @@ export const catalog: Node[] = [
   { key: 'rel-wish-you-the-best', label: 'Wish You the Best', confidence: 'verified' },
   { key: 'rel-neck-me-down-oclock', label: "Neck Me Down O'clock", confidence: 'verified' },
   { key: 'rel-love-you-leave-you', label: 'Love You/Leave You — Nick Nigh feat. LPT · 2023', confidence: 'verified', note: 'Spotify-verified' },
-  { key: 'rel-forbidden-fruit', label: 'Forbidden Fruit (feat. Curtis Williams & LPT)', confidence: 'verified' },
+  { key: 'rel-forbidden-fruit', label: 'Forbidden Fruit — Briley Bell & Lawrence A. Bossong feat. Curtis Williams & LPT · 2019', confidence: 'verified', note: 'Spotify-verified' },
+  { key: 'rel-boy-genius', label: 'Boy Genius — Luca$h feat. LPT · 2020', confidence: 'verified', note: 'appears_on · Spotify-verified' },
+  { key: 'rel-subconscious', label: 'Subconscious — Chris Cash the Gifted feat. LPT · 2017', confidence: 'verified', note: 'appears_on · Spotify-verified' },
 ];
 
 export const collaborators: Node[] = [
