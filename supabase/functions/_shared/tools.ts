@@ -33,6 +33,11 @@ export const SILK_TOOLS = [
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'track id OR "title artist"' } }, required: ['query'] },
   },
   {
+    name: 'read_config_file',
+    description: "Read the ACTUAL current contents of an allowlisted repo config/rulebook file (ground truth). Use this to VERIFY before claiming any config is 'locked'/'set' — never assert config state from memory. Allowed: scripts/prompts.json, docs/LUCIUS_ENTITY_MASTER.md, skills/SILK_IDENTITY.md, skills/<name>.md.",
+    input_schema: { type: 'object', properties: { path: { type: 'string', description: 'e.g. scripts/prompts.json' } }, required: ['path'] },
+  },
+  {
     name: 'get_action_queue_item',
     description: 'Fetch one action_queue item by its exact id (not fuzzy). Use when you have a queue-item id and need its full payload/status.',
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
@@ -162,6 +167,25 @@ async function spotifyArtistCatalog(artistId: string): Promise<unknown> {
   return { count: out.length, releases: out };
 }
 
+// Map an allowlisted repo path → its silk_config key (files are synced there).
+function configKeyForPath(path: string): string | null {
+  const p = path.trim().replace(/^\.?\//, '');
+  if (p === 'skills/SILK_IDENTITY.md') return 'silk_identity';
+  if (p === 'docs/LUCIUS_ENTITY_MASTER.md') return 'entity_master';
+  if (p === 'skills/conversation-distillation.md') return 'distill_doctrine';
+  const skill = p.match(/^skills\/([\w-]+)\.md$/);
+  if (skill) return `skill:${skill[1]}`;
+  if (/^(scripts|config)\//.test(p) && !p.includes('..')) return `file:${p}`;
+  return null;
+}
+async function readConfigFile(path: string): Promise<unknown> {
+  const key = configKeyForPath(path);
+  if (!key) return { error: `path not allowlisted: ${path}` };
+  const { data } = await admin.from('silk_config').select('value, hash, updated_at').eq('key', key).maybeSingle();
+  if (!data) return { error: `not synced: ${path} (key ${key})` };
+  return { path, hash: data.hash, updated_at: data.updated_at, content: String(data.value).slice(0, 12000) };
+}
+
 const FETCH_TABLES = new Set(['action_queue', 'silk_journal', 'mat_answers', 'corpus_drafts', 'visibility_runs', 'silk_questions', 'chat_extractions']);
 async function getRecord(table: string, id: string): Promise<unknown> {
   if (!FETCH_TABLES.has(table)) return { error: `table not allowed: ${table}` };
@@ -192,6 +216,7 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
     if (name === 'spotify_lookup') return await spotifyLookup(String(input.query ?? ''), String(input.type ?? 'track'));
     if (name === 'spotify_artist_catalog') return await spotifyArtistCatalog(String(input.artist_id ?? LPT_ARTIST));
     if (name === 'spotify_track_details') return await spotifyTrackDetails(String(input.query ?? ''));
+    if (name === 'read_config_file') return await readConfigFile(String(input.path ?? ''));
     if (name === 'get_action_queue_item') return await getRecord('action_queue', String(input.id ?? ''));
     if (name === 'get_ledger_record') return await getRecord(String(input.table ?? ''), String(input.id ?? ''));
     if (name === 'journal_retrieve') {
