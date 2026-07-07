@@ -11,7 +11,8 @@
 //                         event: delta → {text}   (repeated)
 //                         event: done  → {ok:true}
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { loadIdentity } from '../_shared/silk.ts';
+import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
+import { runToolLoop } from '../_shared/tools.ts';
 
 const OWNER_EMAIL = 'matc195@gmail.com';
 const CHEAP_MODEL = 'claude-haiku-4-5-20251001';
@@ -131,62 +132,49 @@ Deno.serve(async (req) => {
   const message = rawMessage.replace(/^\/deep\b\s*/i, '');
   const model = deep ? DEEP_MODEL : CHEAP_MODEL;
 
-  const { identity, hash: identityHash } = await loadIdentity();
   const { ctx, refs } = await gatherContext(message);
 
+  // Route through the five-layer retrieval assembly (Brief Seven). ctx becomes the
+  // compact L5 current-state snapshot; the builder handles L1-L4 + records the assembly.
+  const built = await buildSystemPrompt({ surface: 'silk-chat', message, callId: body.chat_id, taskTypeHint: 'chat', ledgerSnapshot: ctx });
+  const identityHash = built.identityHash;
+  const assemblyId = built.assemblyId;
+
   const system =
-    identity +
+    built.system +
     '\n\n--- OPERATING RULES (Parlor) ---\n' +
-    'You are grounded in the SVRHIVE ledger context below. Answer ONLY from it plus general knowledge that does not assert facts about Lucius P. Thundercat / Silk Velvet Records.\n' +
-    'PROVENANCE: if the ledger does not contain the answer, say so plainly — do not invent. Never fabricate metrics, mentions, or facts about the artist/label.\n' +
-    'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.\n\n' +
-    '--- LEDGER CONTEXT ---\n' + ctx;
+    'Answer ONLY from the layered context above plus general knowledge that does not assert facts about Lucius P. Thundercat / Silk Velvet Records.\n' +
+    'PROVENANCE: if your context does not contain the answer, say so plainly — do not invent. Never fabricate metrics, mentions, or facts about the artist/label.\n' +
+    'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.';
 
   const stream = new ReadableStream({
     async start(controller) {
-      sse(controller, 'refs', { ledger_refs: refs, model, identity_hash: identityHash });
+      sse(controller, 'refs', { ledger_refs: refs, model, identity_hash: identityHash, assembly_id: assemblyId, skills: built.skillsLoaded });
       let full = '';
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: MAX_TOKENS,
-            system,
-            stream: true,
-            messages: [{ role: 'user', content: message }],
-          }),
+        // Tool-use loop (Brief Three→Seven): Claude can call web_fetch / journal_retrieve
+        // / ledger_query mid-response instead of asking Mat for retrievable data.
+        // max_tokens is task-classified by the builder (err upward — truncation is worse).
+        const { text, toolTrace, stopReason } = await runToolLoop({
+          system, userText: message, model, anthropicKey: ANTHROPIC_API_KEY,
+          callerJwt: jwt, maxTokens: built.maxTokens,
         });
-        if (!res.ok || !res.body) {
-          sse(controller, 'delta', { text: `\n[silk-chat error: ${res.status}]` });
-        } else {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = '';
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split('\n');
-            buf = lines.pop() ?? '';
-            for (const line of lines) {
-              const m = line.match(/^data: (.*)$/);
-              if (!m) continue;
-              try {
-                const evt = JSON.parse(m[1]);
-                if (evt.type === 'content_block_delta' && evt.delta?.text) {
-                  full += evt.delta.text;
-                  sse(controller, 'delta', { text: evt.delta.text });
-                }
-              } catch { /* ignore keep-alives */ }
-            }
-          }
+        full = text;
+        if (toolTrace.length) {
+          sse(controller, 'tools', { used: toolTrace.map((t) => t.name) });
+          // Journal the completion: Silk retrieved live data via tools rather than asking Mat.
+          await admin.from('silk_journal').insert({
+            entry: `Chat tool-use: called ${toolTrace.map((t) => t.name).join(', ')} to retrieve live data instead of asking Mat. Query: "${message.slice(0, 100)}".`,
+            tags: ['tool-use', 'chat', 'retrieval'],
+          });
         }
+        // Self-detected truncation → journal a config gap (never silently cut off).
+        if (stopReason === 'max_tokens') {
+          await admin.from('silk_journal').insert({ entry: `Truncation: a chat response hit the ${built.maxTokens}-token ceiling (task ${built.taskType}) and cut off. Config gap — this task type may need a higher tier.`, tags: ['truncation', 'config-gap', 'self-diagnostic'] });
+        }
+        // Chunk the final text into deltas so the UI still animates.
+        const words = full.split(/(\s+)/);
+        for (let i = 0; i < words.length; i += 4) sse(controller, 'delta', { text: words.slice(i, i + 4).join('') });
       } catch (e) {
         sse(controller, 'delta', { text: `\n[silk-chat exception: ${e instanceof Error ? e.message : e}]` });
       }

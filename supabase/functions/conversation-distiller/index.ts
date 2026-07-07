@@ -5,7 +5,9 @@
 // Never commits canon. Owner-only.
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { startStatus, endStatus } from '../_shared/status.ts';
-import { loadIdentity, loadConfig, verifyWrite } from '../_shared/silk.ts';
+import { verifyWrite } from '../_shared/silk.ts';
+import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
+import { runToolLoop } from '../_shared/tools.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const MODEL = 'claude-sonnet-4-6'; // precision matters — facts head for canon
@@ -51,31 +53,21 @@ Deno.serve(async (req) => {
 
   const statusId = await startStatus('distilling', 'distilling our conversation', 'conversation-distiller', `${newUser.length} new message(s)`);
 
-  const { identity, hash: identityHash } = await loadIdentity();
-  const distillDoctrine = (await loadConfig('distill_doctrine')).value;
-  const entityMaster = (await loadConfig('entity_master')).value;
-
   // Numbered transcript so the model can cite message indices → we map back to ids.
   const numbered = rows.map((m, i) => `[${i}] ${m.role === 'user' ? 'MAT' : 'SILK'}: ${String(m.content).slice(0, 1200)}`).join('\n');
 
-  const system =
-    identity +
-    '\n\n--- CONVERSATION DISTILLATION DOCTRINE ---\n' + distillDoctrine +
-    '\n\n--- CURRENT ENTITY MASTER (cross-reference for contradictions/extensions; never invent beyond it) ---\n' +
-    entityMaster.slice(0, 12000) +
-    '\n\n--- OUTPUT ---\n' + OUT_FORMAT;
+  // Five-layer assembly (Brief Seven): L2 gives the entity master for contradiction
+  // cross-reference, L3 loads the conversation-distillation doctrine.
+  const built = await buildSystemPrompt({ surface: 'conversation-distiller', message: numbered, callId: chatId, taskTypeHint: 'distillation' });
+  const identityHash = built.identityHash;
+  const system = built.system + '\n\n--- OUTPUT ---\n' + OUT_FORMAT;
   const user = `Distill Mat's statements from this conversation (extract ONLY from lines marked MAT). ` +
     `Anything Silk (assistant) said is context, not a source.\n\n${numbered}`;
 
   let extractions: any[] = [];
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 2000, system, messages: [{ role: 'user', content: user }] }),
-    });
-    const data = await res.json();
-    const text = (data?.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const { text } = await runToolLoop({ system, userText: user, model: MODEL, anthropicKey: ANTHROPIC_API_KEY, callerJwt: jwt, maxTokens: Math.max(2000, built.maxTokens) });
     const j = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
     extractions = Array.isArray(j.extractions) ? j.extractions : [];
   } catch (e) {

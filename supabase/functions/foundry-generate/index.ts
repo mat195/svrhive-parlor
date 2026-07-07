@@ -3,7 +3,9 @@
 // publishes. Owner-only.
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { startStatus, endStatus } from '../_shared/status.ts';
-import { loadIdentity, verifyWrite } from '../_shared/silk.ts';
+import { verifyWrite } from '../_shared/silk.ts';
+import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
+import { runToolLoop } from '../_shared/tools.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -44,23 +46,23 @@ Deno.serve(async (req) => {
     competitorUrls = [...set].slice(0, 12);
   }
 
-  // Ask Claude for the page (body only; we build frontmatter).
-  // SILK_IDENTITY.md (current, runtime-loaded) is the FIRST system block on every Silk call.
-  const { identity, hash: identityHash } = await loadIdentity();
-  const system = identity + '\n\n--- CORPUS PAGE SPEC ---\n' + SPEC + '\nOutput ONLY minified JSON, no prose, no code fences.';
+  // Ask Claude for the page (body only; we build frontmatter). Five-layer assembly
+  // (Brief Seven) — L3 auto-loads corpus-page-spec + schema-markup + format-for-human.
+  const built = await buildSystemPrompt({
+    surface: 'foundry-generate', message: targetQuery, callId: targetQuery, taskTypeHint: 'corpus_draft',
+    ledgerSnapshot: `Competitor URLs currently winning "${targetQuery}": ${competitorUrls.join(', ') || 'none found in ledger'}`,
+  });
+  const identityHash = built.identityHash;
+  const system = built.system + '\n\n--- CORPUS PAGE OUTPUT SPEC ---\n' + SPEC + '\nOutput ONLY minified JSON, no prose, no code fences.';
   const user =
     `Target query: "${targetQuery}".\nCompetitor URLs currently winning this space: ${competitorUrls.join(', ') || 'none found in ledger'}.\n` +
     'Produce JSON: {"title":string (<=70 chars, the question as a title),"description":string (<=160 chars, the direct answer),"body_markdown":string (the full page body in markdown: H1 as the question, direct answer first, a table if useful, short sections; NO frontmatter),"silk_explains":string (one sentence, Silk voice, why publishing this helps),"rationale":string (2-3 sentences: which query, who wins it now, expected outcome)}';
 
   let gen: { title: string; description: string; body_markdown: string; silk_explains: string; rationale: string };
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1500, system, messages: [{ role: 'user', content: user }] }),
-    });
-    const data = await res.json();
-    const text = (data?.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    // Tool-use loop — Claude can web_fetch competitor/source pages while drafting.
+    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const { text } = await runToolLoop({ system, userText: user, model: MODEL, anthropicKey: ANTHROPIC_API_KEY, callerJwt: jwt, maxTokens: built.maxTokens });
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
     gen = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
   } catch (e) {
