@@ -7,6 +7,9 @@ import SilkPanel from './components/SilkPanel';
 import QuestionsStrip from './components/QuestionsStrip';
 import ExtractionsCard from './components/ExtractionsCard';
 import PresenceBar from './components/PresenceBar';
+import DoctrineHash from './components/DoctrineHash';
+import { ToastProvider } from './components/Toast';
+import CommandPalette from './components/CommandPalette';
 import { Spider, Wordmark } from './components/Marks';
 import Brief from './views/Brief';
 import Ledger from './views/Ledger';
@@ -96,7 +99,7 @@ function HQ() {
         <PresenceBar />
         <QuestionsStrip />
         <ExtractionsCard />
-        <header><Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}</header>
+        <header><Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}<DoctrineHash /></header>
         <SilkPanel variant="dock" />
       </aside>
 
@@ -129,5 +132,5 @@ export default function App() {
   if (!ready) return <div className="center muted">…</div>;
   if (!session || session.user.email !== OWNER_EMAIL) return <SignIn wrongUser={!!session && session.user.email !== OWNER_EMAIL} />;
 
-  return <SilkProvider><HQ /></SilkProvider>;
+  return <SilkProvider><ToastProvider><CommandPalette /><HQ /></ToastProvider></SilkProvider>;
 }

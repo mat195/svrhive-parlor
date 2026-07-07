@@ -23,6 +23,26 @@ export const SILK_TOOLS = [
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'e.g. "Love You/Leave You Nick Nigh"' }, type: { type: 'string', description: 'track | album | artist (default track)' } }, required: ['query'] },
   },
   {
+    name: 'spotify_artist_catalog',
+    description: "Enumerate an artist's FULL Spotify catalog — every album, single, and appears_on release (paginated). Returns per release: title, date, LPT role (primary vs featured), collaborators, ISRC. Use for catalog audits / label backfills instead of asking Mat. Defaults to Lucius P. Thundercat.",
+    input_schema: { type: 'object', properties: { artist_id: { type: 'string', description: 'Spotify artist id (default LPT)' } } },
+  },
+  {
+    name: 'spotify_track_details',
+    description: 'Full metadata for a specific track — including copyright + label (fetched from the track and its album). Accepts a Spotify track id or a "title artist" query. Returns ISRC, release date, label, copyrights, duration, popularity, URL.',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'track id OR "title artist"' } }, required: ['query'] },
+  },
+  {
+    name: 'get_action_queue_item',
+    description: 'Fetch one action_queue item by its exact id (not fuzzy). Use when you have a queue-item id and need its full payload/status.',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'get_ledger_record',
+    description: 'Fetch one row by id from a ledger table (Layer 5 fetch-by-id). Allowed tables: action_queue, silk_journal, mat_answers, corpus_drafts, visibility_runs, silk_questions, chat_extractions.',
+    input_schema: { type: 'object', properties: { table: { type: 'string' }, id: { type: 'string' } }, required: ['table', 'id'] },
+  },
+  {
     name: 'journal_retrieve',
     description: "Semantic search over Silk's own journal + past answers (Layer 4 memory). Use when you need a past lesson, decision, or fact you may have recorded but cannot see in context.",
     input_schema: { type: 'object', properties: { query: { type: 'string' }, top_n: { type: 'number' } }, required: ['query'] },
@@ -82,6 +102,74 @@ async function spotifyLookup(query: string, type: string): Promise<unknown> {
   }));
 }
 
+async function spotifyTrackDetails(query: string): Promise<unknown> {
+  const token = await spotifyToken();
+  if (!token) return { error: 'spotify credentials unavailable' };
+  const H = { Authorization: `Bearer ${token}` };
+  // Resolve to a track id: use as id if it looks like one, else search.
+  let id = /^[A-Za-z0-9]{22}$/.test(query.trim()) ? query.trim() : null;
+  if (!id) {
+    const s = await (await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`, { headers: H })).json();
+    id = s?.tracks?.items?.[0]?.id ?? null;
+    if (!id) return { error: 'no track found for query' };
+  }
+  const t = await (await fetch(`https://api.spotify.com/v1/tracks/${id}`, { headers: H })).json();
+  if (t.error) return { error: `spotify track ${t.error.status}` };
+  // label + copyrights live on the album object.
+  let label = null, copyrights = null;
+  if (t.album?.id) {
+    const al = await (await fetch(`https://api.spotify.com/v1/albums/${t.album.id}`, { headers: H })).json();
+    label = al.label ?? null;
+    copyrights = (al.copyrights ?? []).map((c: any) => `${c.type}: ${c.text}`);
+  }
+  return {
+    name: t.name, artists: (t.artists ?? []).map((a: any) => a.name).join(', '),
+    isrc: t.external_ids?.isrc ?? null, album: t.album?.name, release_date: t.album?.release_date,
+    label, copyrights, duration_ms: t.duration_ms, popularity: t.popularity, url: t.external_urls?.spotify,
+  };
+}
+
+const LPT_ARTIST = '2lhuyLLQPcfoXSwcNaXuF1';
+async function spotifyArtistCatalog(artistId: string): Promise<unknown> {
+  const token = await spotifyToken();
+  if (!token) return { error: 'spotify credentials unavailable' };
+  const H = { Authorization: `Bearer ${token}` };
+  const seen = new Map<string, any>();
+  for (const grp of ['album', 'single', 'appears_on']) {
+    let off = 0;
+    while (true) {
+      const j = await (await fetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=${grp}&market=US&limit=10&offset=${off}`, { headers: H })).json();
+      if (j.error) break;
+      for (const a of j.items ?? []) if (!seen.has(a.id)) seen.set(a.id, a);
+      if (!j.items || j.items.length < 10) break;
+      off += 10;
+    }
+  }
+  const out: unknown[] = [];
+  for (const a of seen.values()) {
+    let isrc = null;
+    try {
+      const tj = await (await fetch(`https://api.spotify.com/v1/albums/${a.id}/tracks?market=US&limit=1`, { headers: H })).json();
+      const first = (tj.items ?? [])[0];
+      if (first) { const t = await (await fetch(`https://api.spotify.com/v1/tracks/${first.id}`, { headers: H })).json(); isrc = t.external_ids?.isrc ?? null; }
+    } catch { /* isrc best-effort */ }
+    out.push({
+      title: a.name, date: a.release_date, album_group: a.album_group ?? a.album_type,
+      role: (a.artists ?? []).some((x: any) => x.id === artistId) ? 'primary' : 'featured',
+      collaborators: (a.artists ?? []).map((x: any) => x.name), isrc,
+    });
+  }
+  return { count: out.length, releases: out };
+}
+
+const FETCH_TABLES = new Set(['action_queue', 'silk_journal', 'mat_answers', 'corpus_drafts', 'visibility_runs', 'silk_questions', 'chat_extractions']);
+async function getRecord(table: string, id: string): Promise<unknown> {
+  if (!FETCH_TABLES.has(table)) return { error: `table not allowed: ${table}` };
+  const { data, error } = await admin.from(table).select('*').eq('id', id).maybeSingle();
+  if (error) return { error: error.message };
+  return data ?? { error: 'not found' };
+}
+
 async function ledger(table: string, cols: string, limit: number) {
   try {
     const { data } = await admin.from(table).select(cols).order('created_at', { ascending: false }).limit(limit);
@@ -102,6 +190,10 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
       return { url: j.url, status: j.status, from_cache: j.from_cache, body: String(j.body ?? '').slice(0, 6000) };
     }
     if (name === 'spotify_lookup') return await spotifyLookup(String(input.query ?? ''), String(input.type ?? 'track'));
+    if (name === 'spotify_artist_catalog') return await spotifyArtistCatalog(String(input.artist_id ?? LPT_ARTIST));
+    if (name === 'spotify_track_details') return await spotifyTrackDetails(String(input.query ?? ''));
+    if (name === 'get_action_queue_item') return await getRecord('action_queue', String(input.id ?? ''));
+    if (name === 'get_ledger_record') return await getRecord(String(input.table ?? ''), String(input.id ?? ''));
     if (name === 'journal_retrieve') {
       const out = await retrieve(String(input.query ?? ''), Number(input.top_n ?? 5), 3);
       return [...out.relevant, ...out.recent].slice(0, 8).map((e) => ({ entry: e.entry, tags: e.tags, at: e.created_at }));

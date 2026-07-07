@@ -47,6 +47,10 @@ Deno.serve(async (req) => {
   if (!del.ok) return json({ error: `github delete failed: ${del.status} ${(await del.text()).slice(0, 200)}` }, 502);
 
   const now = new Date().toISOString();
-  await admin.from('corpus_drafts').update({ status: 'retracted', retracted_at: now, updated_at: now }).eq('id', draft.id);
-  return json({ ok: true, retracted_at: now });
+  // Distinguish a retract past the 15-min window (recorded for later review).
+  const afterWindow = (body as { after_window?: boolean }).after_window === true;
+  const note = afterWindow ? 'retracted_after_window' : null;
+  await admin.from('corpus_drafts').update({ status: 'retracted', retracted_at: now, updated_at: now, ...(note ? { mat_note: note } : {}) }).eq('id', draft.id);
+  if (afterWindow) await admin.from('silk_journal').insert({ entry: `Corpus page retracted PAST the 15-min window: "${draft.target_query}" (${draft.live_url}). Recorded as retracted_after_window.`, tags: ['corpus', 'retract', 'after-window'] });
+  return json({ ok: true, retracted_at: now, after_window: afterWindow });
 });

@@ -8,7 +8,7 @@ export default function Foundry() {
   const [query, setQuery] = useState('');
   const [gen, setGen] = useState(false);
   const [err, setErr] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
+  const [sub, setSub] = useState<'active' | 'published' | 'history'>('active');
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('corpus_drafts').select('*').order('created_at', { ascending: false });
@@ -28,9 +28,10 @@ export default function Foundry() {
 
   if (!drafts) return <p className="muted">Loading…</p>;
 
-  const active = drafts.filter((d) => ['proposed', 'edited', 'published'].includes(d.status));
+  const active = drafts.filter((d) => ['proposed', 'edited'].includes(d.status));
+  const published = drafts.filter((d) => d.status === 'published');
   const history = drafts.filter((d) => ['retracted', 'rejected'].includes(d.status));
-  const shown = showHistory ? history : active;
+  const shown = sub === 'published' ? published : sub === 'history' ? history : active;
 
   return (
     <div className="stack">
@@ -41,12 +42,13 @@ export default function Foundry() {
       {err && <p className="err small">{err}</p>}
 
       <div className="subtabs">
-        <button className={!showHistory ? 'chip active' : 'chip'} onClick={() => setShowHistory(false)}>Active ({active.length})</button>
-        <button className={showHistory ? 'chip active' : 'chip'} onClick={() => setShowHistory(true)}>History ({history.length})</button>
+        <button className={sub === 'active' ? 'chip active' : 'chip'} onClick={() => setSub('active')}>Active ({active.length})</button>
+        <button className={sub === 'published' ? 'chip active' : 'chip'} onClick={() => setSub('published')}>Published ({published.length})</button>
+        <button className={sub === 'history' ? 'chip active' : 'chip'} onClick={() => setSub('history')}>History ({history.length})</button>
       </div>
 
       {shown.length === 0
-        ? <p className="muted">{showHistory ? 'Nothing here yet.' : 'No drafts yet. Type a target query above, or wait for Silk to propose one.'}</p>
+        ? <p className="muted">{sub === 'published' ? 'No pages published yet. Publish a draft to see it here.' : sub === 'history' ? 'Nothing here yet.' : 'No drafts yet. Type a target query above, or wait for Silk to propose one.'}</p>
         : shown.map((d) => <DraftCard key={d.id} draft={d} onChange={load} />)}
     </div>
   );

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { marked } from 'marked';
 import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
+import { useToast } from './Toast';
 
 export interface Draft {
   id: string; created_at: string; target_query: string; category: string | null;
@@ -31,6 +32,7 @@ function lineDiff(prev: string, curr: string): { sign: string; text: string }[] 
 }
 
 export default function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
+  const toast = useToast();
   const [mode, setMode] = useState<'preview' | 'edit' | 'details'>('preview');
   const [editBody, setEditBody] = useState(stripFrontmatter(draft.markdown_body || ''));
   const [prevBody, setPrevBody] = useState<string | null>(null);
@@ -53,7 +55,8 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
       (async () => {
         const path = draft.live_url ? new URL(draft.live_url).pathname : null;
         const v = path ? await supabase.from('site_visits').select('id', { count: 'exact', head: true }).eq('path', path) : { count: 0 };
-        const c = await supabase.from('visibility_results').select('id', { count: 'exact', head: true }).ilike('prompt', `%${draft.target_query}%`).eq('mentioned', true);
+        // Battery citations mentioning THIS URL (visibility_results.citations array).
+        const c = draft.live_url ? await supabase.from('visibility_results').select('id', { count: 'exact', head: true }).contains('citations', [draft.live_url]) : { count: 0 };
         setStats({ visits: v.count ?? 0, cites: c.count ?? 0 });
       })();
     }
@@ -78,10 +81,14 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
   }
   async function doRetract() {
     setBusy('retract'); setMsg(''); setConfirm(null);
+    const afterWindow = !withinRetract; // past the 15-min window → recorded distinctly
     try {
-      const r = await callFn('foundry-retract', { draft_id: draft.id });
+      const r = await callFn('foundry-retract', { draft_id: draft.id, after_window: afterWindow });
       setMsg(r.stubbed ? `⚠ ${r.error}` : 'Retracted.');
-      if (!r.stubbed) onChange();
+      if (!r.stubbed) {
+        onChange();
+        toast(afterWindow ? 'Retracted (past window)' : 'Retracted', async () => { await callFn('foundry-publish', { draft_id: draft.id }); onChange(); });
+      }
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   }
@@ -164,7 +171,9 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             published {String(draft.published_at).slice(0, 16).replace('T', ' ')}
             {stats && ` · ${stats.visits} visits · ${stats.cites} citing prompts`}
           </p>
-          {withinRetract && <button className="btn sm ghost" disabled={!!busy} onClick={() => setConfirm('retract')}>Retract (15-min window)</button>}
+          {withinRetract
+            ? <button className="btn sm ghost" disabled={!!busy} onClick={() => setConfirm('retract')}>Retract (15-min window)</button>
+            : <button className="btn sm ghost" disabled={!!busy} onClick={() => setConfirm('retract')}>Retract (past window)</button>}
         </div>
       )}
 

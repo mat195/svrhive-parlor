@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useSilk } from '../SilkContext';
+import { useToast } from '../components/Toast';
 
 function startOfWeek() { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString(); }
 
@@ -16,7 +17,9 @@ interface Moment { id: string; kind: string; observation: string; proposal: stri
 
 export default function Brief() {
   const { setRoom, setFocusNode, pointedNode, askSilk } = useSilk();
+  const toast = useToast();
   const [runs, setRuns] = useState<any[] | null>(null);
+  const [initiatives, setInitiatives] = useState(0);
   const [moment, setMoment] = useState<Moment | null>(null);
   const [sheet, setSheet] = useState(false);
   const [live, setLive] = useState(false);
@@ -43,6 +46,9 @@ export default function Brief() {
       supabase.from('site_visits').select('id', { count: 'exact', head: true }).eq('is_ai_referrer', true).gte('ts', startOfWeek()),
     ]);
     setCounters({ followers: Number(fol.data?.[0]?.value ?? 0), followersCollected: !!fol.data?.length, mentions: men.count ?? 0, ai: ai.count ?? 0 });
+    // Overnight initiatives Silk queued (workshop_initiative).
+    const init = await supabase.from('action_queue').select('id', { count: 'exact', head: true }).eq('status', 'proposed').eq('payload->>generated_by', 'workshop_initiative');
+    setInitiatives(init.count ?? 0);
   }, []);
 
   useEffect(() => {
@@ -72,8 +78,10 @@ export default function Brief() {
     if (!moment) return;
     const until = new Date(Date.now() + 7 * 864e5).toISOString();
     const { data } = await supabase.from('action_queue').select('payload').eq('id', moment.id).single();
-    await supabase.from('action_queue').update({ payload: { ...(data?.payload ?? {}), snoozed_until: until } }).eq('id', moment.id);
+    const prev = data?.payload ?? {};
+    await supabase.from('action_queue').update({ payload: { ...prev, snoozed_until: until } }).eq('id', moment.id);
     setSheet(false); load();
+    toast('Snoozed a week', async () => { await supabase.from('action_queue').update({ payload: prev }).eq('id', moment.id); load(); });
   }
   function askAboutIt() { if (moment) { askSilk(`About your proposal — ${moment.proposal}`); setSheet(false); } }
 
@@ -88,6 +96,13 @@ export default function Brief() {
           <div className={`delta ${delta >= 0 ? 'up' : 'down'}`}>{delta > 0 ? `↑ ${delta}` : delta < 0 ? `↓ ${Math.abs(delta)}` : '— even'}<div className="muted small">vs last week</div></div>
         )}
       </div>
+
+      {initiatives > 0 && (
+        <button className="morning-card" onClick={() => { localStorage.setItem('workshop_tab', 'actions'); localStorage.setItem('workshop_filter', 'initiatives'); setRoom('workshop'); }}>
+          <span className="morning-dot">◆</span>
+          <span>Silk queued <strong>{initiatives}</strong> proposal{initiatives > 1 ? 's' : ''} for you overnight — review in Workshop →</span>
+        </button>
+      )}
 
       <div className="brainmini" role="group" aria-label="Brain preview">
         <button className={`node lpt ${pointedNode === 'lpt' ? 'pulse-point' : ''}`} style={{ left: '26%', top: '30%', width: 78, height: 78 }} onClick={() => goBrain('lpt')}>Lucius P.<br />Thundercat</button>

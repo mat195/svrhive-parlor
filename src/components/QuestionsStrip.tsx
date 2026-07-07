@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
 import { useSilk } from '../SilkContext';
+import { useToast } from './Toast';
 
 // Questions Strip — lives in Silk's column, between the Presence Bar and the chat.
 // Collapsed: [ ● N questions from Silk · tap to answer ▼ ]. Expanded: the top-priority
@@ -60,6 +61,7 @@ export default function QuestionsStrip() {
   const [leaving, setLeaving] = useState(false);
   const [pending, setPending] = useState(0);
   const { pointAt, askSilk } = useSilk();
+  const toast = useToast();
 
   const answeringRef = useRef(false);
   answeringRef.current = answering;
@@ -120,6 +122,7 @@ export default function QuestionsStrip() {
     await supabase.from('silk_questions').update({ status: 'skipped', skipped_at: new Date().toISOString(), skip_reason: reason }).eq('id', id);
     await supabase.from('silk_journal').insert({ entry: `Mat skipped "${q}" — reason: ${reason}. Question Hunter tuning: questions like this aren't worth asking.`, tags: ['question-skip', 'hunter-tuning', reason.replace(/\s+/g, '-')] });
     localStorage.removeItem(draftKey(id));
+    toast(`Skipped — ${reason}`, async () => { await supabase.from('silk_questions').update({ status: 'pending', skipped_at: null, skip_reason: null }).eq('id', id); load(true); });
     setTimeout(() => { setSelectedId(null); load(true); }, 220);
   }
   function cancelAnswer() { setAnswering(false); if (pending > 0) load(true); }

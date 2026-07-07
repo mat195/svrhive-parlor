@@ -5,8 +5,28 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
   const { room, focusNode, prefill, consumePrefill, setTyping, messages, chatBusy, chatBooting, sendMessage, newChat, chats, activeChatId, loadChat } = useSilk();
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [listening, setListening] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recogRef = useRef<any>(null);
+
+  // Web Speech API dictation (mic → text field). Gracefully absent if unsupported.
+  const SpeechRec = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
+  function toggleMic() {
+    if (!SpeechRec) return;
+    if (listening) { recogRef.current?.stop(); return; }
+    const r = new SpeechRec();
+    r.lang = 'en-US'; r.interimResults = true; r.continuous = false;
+    let base = input ? input + ' ' : '';
+    r.onresult = (e: any) => {
+      let txt = '';
+      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      setInput(base + txt); setTyping(true);
+    };
+    r.onend = () => setListening(false);
+    r.onerror = () => setListening(false);
+    recogRef.current = r; setListening(true); r.start();
+  }
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, chatBusy]);
   useEffect(() => { if (prefill) { setInput(consumePrefill()); inputRef.current?.focus(); } }, [prefill, consumePrefill]);
@@ -63,6 +83,11 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
         onChange={(e) => { setInput(e.target.value); setTyping(e.target.value.length > 0); }}
         onBlur={() => setTyping(false)}
         placeholder={silkPlaceholder(room, focusNode)} aria-label="Ask Silk" />
+      {SpeechRec && (
+        <button type="button" className={`mic-btn ${listening ? 'live' : ''}`} onClick={toggleMic} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Voice input">
+          {listening ? '●' : '🎙'}
+        </button>
+      )}
       <button className="btn sm" type="submit" disabled={chatBusy || !input.trim()}>Send</button>
     </form>
   );
