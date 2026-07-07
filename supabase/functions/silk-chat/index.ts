@@ -206,7 +206,12 @@ Deno.serve(async (req) => {
   // caches it and only the DYNAMIC tail (session state + open loops + memory + ledger +
   // rules) is re-read each turn. The session block leads the dynamic tail so it stays
   // prominent (always-present, right after the cached prefix), never budget-dropped.
-  const dynamicText = resolutionBlock + openLoopsBlock + sessionLog + built.dynamic + operatingRules;
+  // Current time — leads the dynamic tail so Silk never guesses the date. Injected per
+  // message (dynamic, uncached). Fixes past/future, "how long ago", freshness, and
+  // schedule-vs-now reasoning (e.g. a next_attempt_at timestamp).
+  const now = new Date();
+  const nowBlock = `\n\n--- CURRENT TIME ---\nNow: ${now.toISOString()} (UTC). Anchor every date/time judgement to this — is X past or future, how long ago, how stale, has a scheduled time passed. Never guess the current date or time.`;
+  const dynamicText = nowBlock + resolutionBlock + openLoopsBlock + sessionLog + built.dynamic + operatingRules;
   const system: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
     { type: 'text', text: built.stable, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: dynamicText },
