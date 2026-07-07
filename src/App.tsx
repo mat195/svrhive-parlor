@@ -17,6 +17,7 @@ import Brain from './views/Brain';
 import Workshop from './views/Workshop';
 import Watchtower from './views/Watchtower';
 import Archive from './views/Archive';
+import Rules from './views/Rules';
 
 const ROOMS: { id: Room; label: string }[] = [
   { id: 'brief', label: 'Brief' },
@@ -25,6 +26,7 @@ const ROOMS: { id: Room; label: string }[] = [
   { id: 'workshop', label: 'Workshop' },
   { id: 'watchtower', label: 'Watch' },
   { id: 'archive', label: 'Archive' },
+  { id: 'rules', label: 'Rules' },
 ];
 
 function parseHash(): { room?: Room; node?: string } {
@@ -50,6 +52,7 @@ function RoomView({ room }: { room: Room }) {
     case 'workshop': return <Workshop />;
     case 'watchtower': return <Watchtower />;
     case 'archive': return <Archive />;
+    case 'rules': return <Rules />;
   }
 }
 

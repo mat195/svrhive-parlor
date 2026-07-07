@@ -56,6 +56,7 @@ export default function Queue() {
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'initiatives' | 'mat'>('all');
   const [risk, setRisk] = useState<'all' | Risk>('all');
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem('workshop_filter') === 'initiatives') { setFilter('initiatives'); localStorage.removeItem('workshop_filter'); }
@@ -129,8 +130,11 @@ export default function Queue() {
   if (!items) return <p className="muted">Loading…</p>;
 
   const initiativeCount = items.filter((it) => isInitiative(it) && it.status === 'proposed').length;
+  const decidedCount = items.filter((it) => it.status !== 'proposed').length;
   let shown = items.filter((it) => filter === 'all' ? true : filter === 'initiatives' ? isInitiative(it) : !isInitiative(it));
   if (risk !== 'all') shown = shown.filter((it) => tierOf(it) === risk);
+  // History (approved/rejected/done) is record, not a decision — hidden by default.
+  if (!showHistory) shown = shown.filter((it) => it.status === 'proposed');
   // Sort proposed items by risk tier (grey → green → amber → red); decided items after.
   shown = [...shown].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'proposed' ? -1 : 1;
@@ -142,7 +146,7 @@ export default function Queue() {
   return (
     <div className="stack">
       <div className="subtabs">
-        <button className={filter === 'all' ? 'chip active' : 'chip'} onClick={() => setFilter('all')}>All ({items.length})</button>
+        <button className={filter === 'all' ? 'chip active' : 'chip'} onClick={() => setFilter('all')}>All ({items.filter((it) => it.status === 'proposed').length})</button>
         <button className={filter === 'initiatives' ? 'chip active' : 'chip'} onClick={() => setFilter('initiatives')}>◆ Silk's Initiatives ({initiativeCount})</button>
         <button className={filter === 'mat' ? 'chip active' : 'chip'} onClick={() => setFilter('mat')}>Mat-triggered</button>
       </div>
@@ -152,6 +156,11 @@ export default function Queue() {
         {(['grey', 'green', 'amber', 'red'] as Risk[]).map((t) => (
           <button key={t} className={risk === t ? 'chip active' : 'chip'} onClick={() => setRisk(t)}><span className={`risk-dot risk-${t}`} /> {t} ({riskCount(t)})</button>
         ))}
+        {decidedCount > 0 && (
+          <button className="link small" style={{ marginLeft: 'auto' }} onClick={() => setShowHistory((s) => !s)}>
+            {showHistory ? 'hide history' : `show history (${decidedCount})`}
+          </button>
+        )}
       </div>
 
       {visibleGreen.length > 0 && (

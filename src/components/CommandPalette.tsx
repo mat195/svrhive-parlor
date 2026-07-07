@@ -41,6 +41,7 @@ export default function CommandPalette() {
     const list: Cmd[] = [
       ...ROOMS.map((r) => ({ label: `Go to ${r[0].toUpperCase() + r.slice(1)}`, hint: 'room', run: () => { setRoom(r); setOpen(false); } })),
       { label: 'Start new chat', hint: 'Silk', run: () => { newChat(); setOpen(false); } },
+      { label: 'Open Rules (Silk\'s rulebooks)', hint: 'rules', run: () => { setRoom('rules'); setOpen(false); } },
       { label: 'Open Workshop → Drafts', hint: 'workshop', run: () => openWorkshop('drafts') },
       { label: 'Open Workshop → Actions (queue)', hint: 'workshop', run: () => openWorkshop('actions') },
       { label: "Open Workshop → Silk's Initiatives", hint: 'workshop', run: () => { localStorage.setItem('workshop_filter', 'initiatives'); openWorkshop('actions'); } },

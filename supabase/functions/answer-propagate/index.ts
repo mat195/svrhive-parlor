@@ -36,25 +36,40 @@ Deno.serve(async (req) => {
   // 1. mark answered
   await admin.from('silk_questions').update({ status: 'answered', answer: body.answer, answered_at: answeredAt }).eq('id', q.id);
 
-  // 3a. journal in Silk's voice (created first so we can link it back).
-  const journalEntry = `Mat answered "${q.question}" → "${body.answer}". I read this as a confirmed fact for ${field}. It ripples to ${surfaces.length} surface(s): ${surfaces.join('; ')}. Filed a cascade for review — nothing changes those surfaces until Mat approves.`;
-  const { data: jr } = await admin.from('silk_journal').insert({ entry: journalEntry, tags: ['answer', 'propagation', field] }).select('id').single();
+  // Decide: does this need a SECOND decision from Mat, or did he already decide it?
+  // Mat already answered the question — persisting a single-surface, non-contradicting
+  // answer is NOT a second decision. Only queue when it's genuinely ambiguous:
+  //   • touches 3+ surfaces, OR
+  //   • contradicts an existing verified canonical fact (supersession).
+  const { data: existing } = await admin.from('entity_facts').select('value').eq('key', field).eq('confidence', 'verified').limit(1);
+  const contradicts = !!existing?.length && existing[0].value && existing[0].value !== body.answer;
+  const shouldQueue = surfaces.length >= 3 || contradicts;
 
-  // 1b. append to mat_answers ledger
+  // 3a. journal (created first so we can link it back).
+  const journalEntry = shouldQueue
+    ? `Mat answered "${q.question}" → "${body.answer}". Confirmed fact for ${field}, rippling to ${surfaces.length} surface(s): ${surfaces.join('; ')}. ${contradicts ? 'CONTRADICTS an existing verified fact — ' : ''}filed a cascade for your review; nothing changes those surfaces until you approve.`
+    : `Mat answered "${q.question}" → "${body.answer}" — auto-applied (single surface: ${field}, no contradiction). You already decided this; I persisted it. Repo-file sync is bookkeeping (journaled, not queued).`;
+  const { data: jr } = await admin.from('silk_journal').insert({ entry: journalEntry, tags: ['answer', 'propagation', field, shouldQueue ? 'queued' : 'auto-applied'] }).select('id').single();
+
+  // 1b. append to mat_answers ledger (complete when auto-applied).
   const { data: ans } = await admin.from('mat_answers').insert({
     question_id: q.id, question_text: q.question, answer_text: body.answer,
-    entity_master_field_touched: field, propagation_status: 'pending', journal_ref: jr?.id ?? null,
+    entity_master_field_touched: field, propagation_status: shouldQueue ? 'pending' : 'complete', journal_ref: jr?.id ?? null,
   }).select('id').single();
 
-  // 2. file ONE cascade queue item (single approval, not many).
-  await admin.from('action_queue').insert({
-    kind: 'answer-cascade', status: 'proposed', risk_tier: 'amber',
-    payload: {
-      title: `Answer → review ${surfaces.length} surface${surfaces.length > 1 ? 's' : ''}`,
-      rationale: `You answered: "${q.question}" → "${body.answer}".\nThis updates entity-master field "${field}" and should propagate to:\n${surfaces.map((s) => '• ' + s).join('\n')}\n\nApprove to authorize the cascade (the builder applies the edits + regenerates affected kits/pages). Reject if it shouldn't propagate.`,
-      answer_id: ans?.id, field, surfaces, priority: 1,
-    },
-  });
+  if (shouldQueue) {
+    await admin.from('action_queue').insert({
+      kind: 'answer-cascade', status: 'proposed', risk_tier: 'amber',
+      payload: {
+        title: `Answer → review ${surfaces.length} surface${surfaces.length > 1 ? 's' : ''}${contradicts ? ' (contradiction)' : ''}`,
+        rationale: `You answered: "${q.question}" → "${body.answer}".\nThis updates entity-master field "${field}" and should propagate to:\n${surfaces.map((s) => '• ' + s).join('\n')}\n${contradicts ? `\n⚠ This CONTRADICTS an existing verified fact ("${existing![0].value}"). Approve to supersede.\n` : ''}\nApprove to authorize the cascade. Reject if it shouldn't propagate.`,
+        answer_id: ans?.id, field, surfaces, contradicts, priority: 1,
+      },
+    });
+  } else {
+    // Auto-apply: record the canonical fact now (single-surface, Mat-decided).
+    await admin.from('entity_facts').insert({ key: field, value: body.answer, source: `Mat answer (Questions Strip) — auto-applied ${answeredAt}`, confidence: 'verified' });
+  }
 
   // Voice-not-hands: confirm the two state changes landed before reporting done.
   const qProof = await verifyWrite('silk_questions', { id: q.id, status: 'answered' });
@@ -63,5 +78,5 @@ Deno.serve(async (req) => {
     return json({ error: 'propagation unverified', question_proof: qProof.detail, answer_proof: aProof.detail }, 500);
   }
 
-  return json({ ok: true, field, surfaces, journal_ref: jr?.id, write_proof: [qProof.detail, aProof.detail] });
+  return json({ ok: true, field, surfaces, queued: shouldQueue, auto_applied: !shouldQueue, journal_ref: jr?.id, write_proof: [qProof.detail, aProof.detail] });
 });

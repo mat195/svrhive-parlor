@@ -8,6 +8,7 @@ import { startStatus, endStatus } from '../_shared/status.ts';
 import { verifyWrite } from '../_shared/silk.ts';
 import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
 import { runToolLoop } from '../_shared/tools.ts';
+import { applyExtraction, isLowStakes } from '../_shared/extractions.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const MODEL = 'claude-sonnet-4-6'; // precision matters — facts head for canon
@@ -80,12 +81,17 @@ Deno.serve(async (req) => {
 
   // Insert proposed extractions (nothing touches canon here).
   const inserted: any[] = [];
+  let autoApplied = 0;
   for (const x of extractions) {
     const refs: string[] = (Array.isArray(x.msg_refs) ? x.msg_refs : [])
       .map((i: number) => rows[i]?.id).filter(Boolean);
     const type = ['fact', 'preference', 'correction', 'instinct', 'question'].includes(x.type) ? x.type : 'fact';
     const conf = ['verified', 'unverified', 'needs-review'].includes(x.confidence) ? x.confidence : 'needs-review';
-    const { data: row, error } = await admin.from('chat_extractions').insert({
+    // Auto-apply low-stakes extractions (Mat already said it explicitly, no ambiguity,
+    // no contradiction) — persist + journal, don't surface. Only genuinely ambiguous /
+    // superseding ones stay 'pending' in the notes tray for Mat's review.
+    const low = isLowStakes({ extraction_type: type, confidence: conf, supersedes: x.supersedes });
+    const { data: row } = await admin.from('chat_extractions').insert({
       chat_id: chatId,
       message_ids: refs,
       extraction_type: type,
@@ -94,9 +100,16 @@ Deno.serve(async (req) => {
       provenance: { source: 'chat', chat_id: chatId, message_ids: refs, quote: x.quote ?? '', at: nowIso, trigger },
       confidence: conf,
       supersedes: x.supersedes ?? null,
-      status: 'pending',
-    }).select('id, extraction_type, confidence, supersedes, proposed_content').single();
-    if (!error && row) inserted.push(row);
+      status: low ? 'approved' : 'pending',
+      resolved_at: low ? nowIso : null,
+    }).select('id, extraction_type, confidence, supersedes, target_field, proposed_content').single();
+    if (!row) continue;
+    if (low) {
+      await applyExtraction({ ...row, auto: true });
+      autoApplied++;
+    } else {
+      inserted.push(row); // surfaced for review
+    }
   }
 
   // Advance the checkpoint (append-only run record).
@@ -108,16 +121,14 @@ Deno.serve(async (req) => {
     notes: `trigger=${trigger}; ${newUser.length} new Mat msg(s); ${inserted.length} extraction(s)`,
   });
 
-  // Voice-not-hands: prove the extractions landed.
+  // Voice-not-hands: prove the surfaced extractions landed.
   const proof = await verifyWrite('chat_extractions', { chat_id: chatId, status: 'pending' }, inserted.length || 0);
 
-  if (inserted.length > 0) {
-    await admin.from('silk_journal').insert({
-      entry: `Distilled our conversation → ${inserted.length} proposed extraction(s) waiting for your review: ${inserted.map((r) => `${r.extraction_type}`).join(', ')}. Nothing touches canon until you approve.`,
-      tags: ['distiller', 'retention', 'brief-six'],
-    });
-  }
+  await admin.from('silk_journal').insert({
+    entry: `Distilled our conversation → ${autoApplied} auto-applied (you already said it — persisted, not surfaced) + ${inserted.length} surfaced for review${inserted.length ? ` (${inserted.map((r) => r.extraction_type).join(', ')} — ambiguous/contradiction/multi-surface)` : ''}.`,
+    tags: ['distiller', 'retention', 'auto-apply'],
+  });
 
-  await endStatus(statusId, inserted.length > 0);
-  return json({ ok: true, extraction_count: inserted.length, extractions: inserted, identity_hash: identityHash, write_proof: proof.detail });
+  await endStatus(statusId, inserted.length > 0 || autoApplied > 0);
+  return json({ ok: true, surfaced: inserted.length, auto_applied: autoApplied, extractions: inserted, identity_hash: identityHash, write_proof: proof.detail });
 });
