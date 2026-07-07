@@ -106,7 +106,7 @@ export default function Watchtower() {
 
       <section>
         <h2>Live feed <span className="muted small">· last 20</span></h2>
-        {feed.length === 0 ? <p className="muted">Quiet so far.</p> : (
+        {feed.length === 0 ? <p className="muted">0 pages live — the clock starts at first publish. Nothing refers traffic until a corpus/release page is on silkvelvetrecords.com.</p> : (
           <ul className="rows">
             {feed.map((v) => (
               <li key={v.id} className="row feed-row">

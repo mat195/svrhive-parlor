@@ -68,6 +68,9 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .chip { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); color: var(--muted); border-radius: 999px; padding: 0.3rem 0.75rem; font-size: 0.78rem; cursor: pointer; }
 .chip.active { background: var(--gold); color: #1a0f14; border-color: var(--gold); }
 .chip.ok { color: var(--verified); } .chip.err { color: var(--err); } .chip.done { color: var(--muted); }
+.chip.warn { color: #e0b34f; border-color: rgba(224,179,79,0.4); }
+.revise-row { display: flex; gap: 0.4rem; margin: 0.6rem 0; }
+.revise-row input { flex: 1; }
 input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); border: 1px solid rgba(255,255,255,0.1); border-radius: 9px; padding: 0.6rem 0.7rem; font-size: 0.95rem; font-family: var(--sans); }
 .hairline { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,169,97,0.4), transparent); border: none; margin: 1.1rem 0; }
 
@@ -144,7 +147,7 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .rules-index { border-right: 1px solid rgba(255,255,255,0.06); padding-right: 0.7rem; max-height: 78vh; overflow: auto; }
 .rules-search { width: 100%; box-sizing: border-box; margin-bottom: 0.6rem; }
 .rules-group-label { font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); margin: 0.7rem 0 0.3rem; }
-.rules-item { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--muted); padding: 0.32rem 0.4rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
+.rules-item { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; width: 100%; text-align: left; background: none; border: none; color: var(--muted); padding: 0.32rem 0.4rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
 .rules-item.active { background: rgba(201,169,97,0.12); color: var(--ink); }
 .rules-item:hover { color: var(--ink); }
 .rules-content { max-height: 78vh; overflow: auto; }

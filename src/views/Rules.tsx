@@ -22,7 +22,9 @@ export default function Rules() {
   const [q, setQ] = useState('');
 
   useEffect(() => {
-    supabase.from('silk_config').select('key, value, hash, updated_at').order('key').then(({ data }) => setCfgs((data as Cfg[]) ?? []));
+    supabase.from('silk_config').select('key, value, hash, updated_at').order('key')
+      // Dedupe: distill_doctrine is the same file as skill:conversation-distillation.
+      .then(({ data }) => setCfgs(((data as Cfg[]) ?? []).filter((c) => c.key !== 'distill_doctrine')));
   }, []);
 
   const groups = useMemo(() => {
@@ -48,7 +50,8 @@ export default function Rules() {
             <div className="rules-group-label">{g}</div>
             {groups[g].map((c) => (
               <button key={c.key} className={c.key === openKey ? 'rules-item active' : 'rules-item'} onClick={() => setOpenKey(c.key)}>
-                {label(c.key).name}
+                <span>{label(c.key).name}</span>
+                <span className="muted" style={{ fontSize: '0.62rem' }}>{String(c.updated_at).slice(0, 10)}</span>
               </button>
             ))}
           </div>

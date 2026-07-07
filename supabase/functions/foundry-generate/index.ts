@@ -5,7 +5,6 @@ import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { startStatus, endStatus } from '../_shared/status.ts';
 import { verifyWrite } from '../_shared/silk.ts';
 import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
-import { runToolLoop } from '../_shared/tools.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -58,17 +57,34 @@ Deno.serve(async (req) => {
     `Target query: "${targetQuery}".\nCompetitor URLs currently winning this space: ${competitorUrls.join(', ') || 'none found in ledger'}.\n` +
     'Produce JSON: {"title":string (<=70 chars, the question as a title),"description":string (<=160 chars, the direct answer),"body_markdown":string (the full page body in markdown: H1 as the question, direct answer first, a table if useful, short sections; NO frontmatter),"silk_explains":string (one sentence, Silk voice, why publishing this helps),"rationale":string (2-3 sentences: which query, who wins it now, expected outcome)}';
 
-  let gen: { title: string; description: string; body_markdown: string; silk_explains: string; rationale: string };
-  try {
-    // Tool-use loop — Claude can web_fetch competitor/source pages while drafting.
-    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-    const { text } = await runToolLoop({ system, userText: user, model: MODEL, anthropicKey: ANTHROPIC_API_KEY, callerJwt: jwt, maxTokens: built.maxTokens });
-    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
-    gen = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
-  } catch (e) {
-    await endStatus(statusId, false);
-    return json({ error: 'generation failed: ' + (e instanceof Error ? e.message : String(e)) }, 500);
+  // Robust JSON extraction: strip fences, take the outer {...}.
+  const parseGen = (text: string) => {
+    const s = (text ?? '').replace(/^```(?:json)?/im, '').replace(/```\s*$/m, '').trim();
+    const a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) throw new Error('no JSON object in model output');
+    return JSON.parse(s.slice(a, b + 1));
+  };
+  const anthropicJSON = async (): Promise<string> => {
+    let delay = 1000;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: built.maxTokens, system, messages: [{ role: 'user', content: user }], stop_sequences: [] }),
+      });
+      if (res.status === 429 || res.status === 529) { await new Promise((r) => setTimeout(r, delay)); delay = Math.min(delay * 2, 16000); continue; }
+      const data = await res.json();
+      return (data?.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    }
+    return '';
+  };
+
+  // Direct single-shot generation (no tools — reliable JSON) with a parse-retry.
+  let gen: { title: string; description: string; body_markdown: string; silk_explains: string; rationale: string } | null = null;
+  let lastErr = '';
+  for (let attempt = 1; attempt <= 3 && !gen; attempt++) {
+    try { gen = parseGen(await anthropicJSON()); } catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
   }
+  if (!gen) { await endStatus(statusId, false); return json({ error: `generation failed (no valid JSON after 3 attempts): ${lastErr}` }, 500); }
 
   const slug = slugify(gen.title || targetQuery);
   const filename = `${slug}.md`;

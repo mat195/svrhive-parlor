@@ -94,7 +94,7 @@ function renderRow(tab: Tab, r: any) {
     return (
       <>
         <div className="row-head">
-          <span className={r.mentioned ? 'pill hit' : 'pill'}>{r.mentioned ? 'mentioned' : 'no'}</span>
+          <span className={r.mentioned ? 'pill hit' : 'pill'}>{r.mentioned ? 'LPT mentioned' : 'LPT: not mentioned'}</span>
           <span className="muted">{r.engine} · {r.category}</span>
         </div>
         <div className="row-title">{r.prompt}</div>

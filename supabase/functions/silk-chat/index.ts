@@ -156,6 +156,23 @@ Deno.serve(async (req) => {
       openLoops = openLoops.slice(0, -1);
     }
   }
+  // Fallback (P0-1 hardening): a bare resolution with no pinned loop still resolves the
+  // newest recently-proposed action (last 15 min) — so "approve" never dead-ends even
+  // when Silk proposed something without formally pinning it.
+  if (isResolution && !resolutionNote) {
+    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: recent } = await admin.from('action_queue').select('id, kind, payload').eq('status', 'proposed').gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+    const affirm = /^\s*(approve|approved|yes|yep|yeah|ok|okay|do it|go ahead|sure|confirm)/i.test(message);
+    const reject = /^\s*(reject|no|nope)/i.test(message);
+    if (recent?.length && (affirm || reject)) {
+      const r = recent[0];
+      await admin.from('action_queue').update({ status: affirm ? 'approved' : 'rejected', payload: { ...(r.payload ?? {}), decided_at: new Date().toISOString() } }).eq('id', r.id);
+      resolutionNote = affirm
+        ? `Mat said "${message}" → resolved the most recent open proposal ("${r.payload?.title ?? r.kind}", ${r.id}). You have ALREADY approved it; the executor is acting now. Confirm in one line — do NOT ask what to approve.`
+        : `Mat said "${message}" → rejected the most recent proposal ("${r.payload?.title ?? r.kind}"). Confirm briefly.`;
+      await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'resolve', description: `fallback ${affirm ? 'approve' : 'reject'}: ${r.payload?.title ?? r.kind}`, item_id: r.id });
+    }
+  }
   const openLoopsBlock = openLoops.length
     ? `--- AWAITING MAT (open loops — resolve short replies against the NEWEST) ---\n${openLoops.map((l, i) => `${i + 1}. ${l.description}${l.options_offered ? ` [${l.options_offered}]` : ''}`).join('\n')}\nShort replies like "approve"/"yes"/"2" resolve against these.\n\n`
     : '';

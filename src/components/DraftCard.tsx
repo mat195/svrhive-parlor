@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
 import { useToast } from './Toast';
+
+// Derived, human status (item 4): what does this draft need from Mat?
+function draftStatus(d: Draft): { label: string; cls: string } {
+  if (d.status === 'published') return { label: 'published', cls: 'chip ok' };
+  if (d.status === 'retracted' || d.status === 'rejected') return { label: d.status, cls: 'chip err' };
+  if (/\[MAT:/.test(d.markdown_body ?? '')) return { label: 'waiting on Mat inputs', cls: 'chip warn' };
+  if (d.status === 'edited') return { label: 'ready', cls: 'chip ok' };
+  return { label: 'proposed by Silk', cls: 'chip' };
+}
 
 export interface Draft {
   id: string; created_at: string; target_query: string; category: string | null;
@@ -38,6 +47,10 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
   const [prevBody, setPrevBody] = useState<string | null>(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
+  const [reviseNote, setReviseNote] = useState('');
+  const [listening, setListening] = useState(false);
+  const recogRef = useRef<any>(null);
+  const SpeechRec = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
   const [confirm, setConfirm] = useState<null | 'publish' | 'retract'>(null);
   const [countdown, setCountdown] = useState(3);
   const [stats, setStats] = useState<{ visits: number; cites: number } | null>(null);
@@ -98,6 +111,27 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
     await supabase.from('corpus_drafts').update({ status: 'rejected', mat_note: note, updated_at: new Date().toISOString() }).eq('id', draft.id);
     setBusy(''); onChange();
   }
+  async function doRevise() {
+    const note = reviseNote.trim();
+    if (!note || busy) return;
+    setBusy('revise'); setMsg('');
+    try {
+      const r = await callFn('foundry-revise', { draft_id: draft.id, note });
+      if (!r?.ok) throw new Error(r?.error ?? 'revise failed');
+      setReviseNote(''); toast(`Revised (v${r.version}) — ${r.changed_summary ?? 'updated'}`); onChange();
+    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
+    setBusy('');
+  }
+  function toggleMic() {
+    if (!SpeechRec) return;
+    if (listening) { recogRef.current?.stop(); return; }
+    const r = new SpeechRec();
+    r.lang = 'en-US'; r.interimResults = true; r.continuous = false;
+    const base = reviseNote ? reviseNote + ' ' : '';
+    r.onresult = (e: any) => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; setReviseNote(base + t); };
+    r.onend = () => setListening(false); r.onerror = () => setListening(false);
+    recogRef.current = r; setListening(true); r.start();
+  }
   async function doRegenerate() {
     setBusy('regen'); setMsg('');
     try { await callFn('foundry-generate', { target_query: draft.target_query }); onChange(); }
@@ -118,7 +152,7 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
   return (
     <div className="card draftcard">
       <div className="row-head">
-        <span className={STATUS_CLASS[draft.status] ?? 'chip'}>{draft.status}</span>
+        {(() => { const s = draftStatus(draft); return <span className={s.cls}>{s.label}</span>; })()}
         <span className="muted small">{draft.filename} · {String(draft.created_at).slice(0, 10)}</span>
       </div>
       <div className="draft-query">{draft.target_query}</div>
@@ -155,6 +189,14 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
               {draft.ledger_refs?.length > 0 && <p className="muted">Sourced from: {draft.ledger_refs.map((r: any) => r.kind).join(', ')}</p>}
             </div>
           )}
+
+          <div className="revise-row">
+            <input value={reviseNote} onChange={(e) => setReviseNote(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && reviseNote.trim()) doRevise(); }}
+              placeholder="Tell Silk how to revise this — plain language…" disabled={busy === 'revise'} />
+            {SpeechRec && <button type="button" className={`mic-btn ${listening ? 'live' : ''}`} onClick={toggleMic} title="Dictate">{listening ? '●' : '🎙'}</button>}
+            <button className="btn sm" disabled={!reviseNote.trim() || busy === 'revise'} onClick={doRevise}>{busy === 'revise' ? 'Revising…' : 'Revise'}</button>
+          </div>
 
           <div className="what-happens">
             <span className="risk-dot risk-red" /> <strong>If published (RED):</strong> commits {draft.filename} to the svrhive-site repo, GitHub Actions builds the site, live at {draft.live_url} in ~1–2 min. Retract available for 15 minutes after publish.
