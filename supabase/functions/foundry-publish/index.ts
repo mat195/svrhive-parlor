@@ -2,6 +2,7 @@
 // Mat's Publish click (owner-verified) AND only if AUTOPILOT_ALLOWLIST authorizes
 // the scoped door. No token configured → clean stub (nothing committed).
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
+import { provenanceIssues } from '../_shared/provenance.ts';
 
 const REPO = 'mat195/svrhive-site';
 const ALLOW_ENTRY = 'github:svrhive-site:commit-on-approval';
@@ -24,6 +25,18 @@ Deno.serve(async (req) => {
 
   const { data: draft, error: dErr } = await admin.from('corpus_drafts').select('*').eq('id', body.draft_id).single();
   if (dErr || !draft) return json({ error: 'draft not found' }, 404);
+
+  // PROVENANCE GATE (Foundation Rule): block the commit if the draft would fail the
+  // site's provenance lint. Runs BEFORE any GitHub write, so bad content never reaches
+  // the repo — not caught late at CI. Every publish passes through here (only committer).
+  const issues = provenanceIssues(draft.markdown_body ?? '');
+  if (issues.length) {
+    await admin.from('silk_journal').insert({
+      entry: `[gate] Publish BLOCKED for ${draft.filename} (${draft.id}) — provenance: ${issues.join('; ')}. Nothing committed.`,
+      tags: ['gate', 'provenance', 'publish-blocked'],
+    });
+    return json({ ok: false, blocked: true, error: `Publish blocked by provenance gate: ${issues.join('; ')}. Fix the draft (Quick Edit / Revise) and try again.`, issues }, 422);
+  }
 
   const token = Deno.env.get('GITHUB_TOKEN');
   if (!token) {
