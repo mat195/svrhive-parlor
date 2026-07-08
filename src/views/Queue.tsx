@@ -39,11 +39,11 @@ function approvalInfo(it: QueueItem): { what: string; effort: string } {
   if (k === 'doctrine-sync' || k === 'weekly-consolidation')
     return { what: `Updates Silk's rules (runtime + rulebook). Changes how Silk behaves going forward. Reversible; the old version is archived in the rule history.`, effort: '~1 min' };
   if (k === 'bio-approval' || k === 'bio-revision')
-    return { what: `Updates the bio (queued, not published). It flows to the entity master; the public site only changes if you later publish it.`, effort: '~1 min' };
+    return { what: `Records this bio as the canonical version in Silk's fact ledger (entity_facts). It does NOT publish to the public site — silkvelvetrecords.com is updated in a separate step. The item stays open until the live site is verified to show the new text.`, effort: 'record now; site later' };
   if (k === 'tier-reclass')
-    return { what: `Applies the reclassification to the affected §6 releases, adds tier_history entries, and updates any release pages currently rendering them differently. Nothing external changes — internal categorization only.`, effort: '~2 min' };
+    return { what: `Records the reclassification in the fact ledger (entity_facts) with a tier_history entry. Internal categorization only — no public surface changes automatically.`, effort: '~1 min' };
   if (k === 'answer-cascade' || k === 'appears-on-audit' || k === 'catalog-backfill' || k === 'metadata-fix' || k === 'revise-role' || k === 'reference-swap' || k === 'genre-change')
-    return { what: `Updates the entity master with the proposed change. The cascade fires to the affected surfaces (Brain, bios, submission kits as applicable). Provenance is logged and the old value archived.`, effort: '~1–2 min' };
+    return { what: `Records this as a canonical fact in Silk's ledger (entity_facts), with provenance logged and the old value superseded. This does NOT automatically change the public site, bios, or submission kits — those are separate publish steps. If the fact names a public surface, the item stays open until that live surface is verified to show the new value.`, effort: 'record now; publish separately' };
   if (tierOf(it) === 'grey')
     return { what: `Your answer routes through mat_answers → the cascade updates the affected fields. Nothing executes on a public surface without your further action.`, effort: 'your call' };
   return { what: `Records your decision. Nothing executes on a public surface without your further action.`, effort: '~1 min' };

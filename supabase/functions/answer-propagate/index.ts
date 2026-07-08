@@ -58,13 +58,22 @@ Deno.serve(async (req) => {
     entity_master_field_touched: field, propagation_status: shouldQueue ? 'pending' : 'complete', journal_ref: jr?.id ?? null,
   }).select('id').single();
 
+  // Live-verification spec (Brief: verify-before-done). For fields that map to a PUBLIC
+  // surface, tell the executor exactly what to confirm on the live site before it can close
+  // the item: the new value must be present (and, on a contradiction, the old value gone).
+  const ARTIST_PAGE = 'https://silkvelvetrecords.com/lucius-p-thundercat/';
+  const verify =
+    field === 'activeSince' ? { url: ARTIST_PAGE, expect: `active since ${body.answer}`, forbid: contradicts ? `active since ${existing![0].value}` : '' }
+    : field === 'location' ? { url: ARTIST_PAGE, expect: String(body.answer) }
+    : undefined;
+
   if (shouldQueue) {
     await fileQueueItem({
       kind: 'answer-cascade', risk_tier: 'amber',
       payload: {
         title: `Answer → review ${surfaces.length} surface${surfaces.length > 1 ? 's' : ''}${contradicts ? ' (contradiction)' : ''}`,
-        rationale: `You answered: "${q.question}" → "${body.answer}".\nThis updates entity-master field "${field}" and should propagate to:\n${surfaces.map((s) => '• ' + s).join('\n')}\n${contradicts ? `\n⚠ This CONTRADICTS an existing verified fact ("${existing![0].value}"). Approve to supersede.\n` : ''}\nApprove to authorize the cascade. Reject if it shouldn't propagate.`,
-        answer_id: ans?.id, field, surfaces, contradicts, priority: 1,
+        rationale: `You answered: "${q.question}" → "${body.answer}".\nThis updates entity-master field "${field}" and should propagate to:\n${surfaces.map((s) => '• ' + s).join('\n')}\n${contradicts ? `\n⚠ This CONTRADICTS an existing verified fact ("${existing![0].value}"). Approve to supersede.\n` : ''}\nApprove to record the canonical fact. ${verify ? 'The item stays open until the LIVE site is verified to show it.' : 'Publishing to public surfaces is a separate step.'} Reject if it shouldn't apply.`,
+        answer_id: ans?.id, field, surfaces, contradicts, priority: 1, ...(verify ? { verify } : {}),
       },
     });
   } else {

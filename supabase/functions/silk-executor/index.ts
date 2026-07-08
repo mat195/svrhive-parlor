@@ -1,8 +1,14 @@
-// silk-executor (Brief Nine P0-3) — closes the approval→execution gap. Invoked by the
-// dispatch trigger when an action_queue item flips to approved. Performs the action,
-// VERIFIES the artifact exists, then marks the item done — or leaves it approved with a
-// plain-language execution_error surfaced to Mat. Gated: only pre-defined kinds; red
-// tier is never auto-executed (publish still needs Mat's tap).
+// silk-executor — closes the approval→execution gap. Invoked by the dispatch trigger when
+// an action_queue item flips to approved, and by a sweep cron (the reliability backstop for
+// when the trigger's async net.http_post doesn't deliver). Performs the action, VERIFIES the
+// artifact, then marks done — or holds the item open with a plain-language error/alert.
+//
+// TRUST-CRITICAL invariant (Brief: verify-before-done): a fact correction is never marked
+// `done` on the strength of a ledger row alone. If the fact names a PUBLIC surface, we fetch
+// that live surface and confirm the new value is present (and the old value gone) before
+// closing. If it isn't there yet, the item stays open (awaiting_site) and alerts — the sweep
+// re-checks it every run and auto-closes it the moment the live site reflects the change.
+// Gated: pre-defined kinds only; red tier is never auto-executed (publish still needs Mat).
 import { admin, json, CORS } from '../_shared/auth.ts';
 import { verifyWrite } from '../_shared/silk.ts';
 
@@ -12,7 +18,12 @@ const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const CRON_KEY = Deno.env.get('CRON_KEY') ?? '';
 const OWNER = 'matc195@gmail.com';
 
-// Mint an owner access token so we can reuse owner-gated functions (foundry-generate).
+// Fact-correction kinds: each records a canonical entity_facts row, then (if it names a
+// public surface) must pass live verification before it can close.
+const FACT_KINDS = ['answer-cascade', 'metadata-fix', 'bio-approval', 'bio-revision', 'tier-reclass', 'genre-change', 'revise-role', 'reference-swap', 'appears-on-audit', 'catalog-backfill'];
+// Everything the trigger/sweep is allowed to auto-execute.
+const EXECUTABLE = ['corpus-initiative', 'corpus-page', 'audit-initiative', 'catalog-audit', ...FACT_KINDS];
+
 async function mintOwnerToken(): Promise<string | null> {
   const h = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' };
   const gl = await (await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, { method: 'POST', headers: h, body: JSON.stringify({ type: 'magiclink', email: OWNER }) })).json();
@@ -23,11 +34,32 @@ async function mintOwnerToken(): Promise<string | null> {
 }
 
 async function markDone(id: string, payload: Record<string, unknown>, result: string) {
-  await admin.from('action_queue').update({ status: 'done', payload: { ...payload, executed: true, execution_result: result, executed_at: new Date().toISOString() } }).eq('id', id);
+  await admin.from('action_queue').update({ status: 'done', payload: { ...payload, executed: true, awaiting_site: false, execution_result: result, executed_at: new Date().toISOString() } }).eq('id', id);
 }
 async function markError(id: string, payload: Record<string, unknown>, err: string) {
   await admin.from('action_queue').update({ payload: { ...payload, execution_error: err, error_at: new Date().toISOString() } }).eq('id', id); // stays 'approved' → sweeper/Mat see the error
   await admin.from('silk_journal').insert({ entry: `[executor] Execution FAILED for queue item ${id}: ${err}. Item held in approved with a visible error.`, tags: ['executor', 'execution-error'] });
+}
+// Ledger written, but the LIVE public surface doesn't show it yet. Never "done" — held open + alert.
+async function markAwaitingSite(id: string, payload: Record<string, unknown>, note: string, siteCheck: Record<string, unknown>) {
+  await admin.from('action_queue').update({ payload: { ...payload, executed: false, awaiting_site: true, site_check: siteCheck, execution_note: note, checked_at: new Date().toISOString() } }).eq('id', id);
+  await admin.from('silk_journal').insert({ entry: `[executor] Queue item ${id} ("${payload.title ?? ''}") recorded in the fact ledger, but the LIVE site does not yet reflect it — ${note}. Held OPEN (awaiting_site); the sweep re-checks until the public surface is verified. ⚠ ALERT.`, tags: ['executor', 'awaiting-site', 'alert'] });
+}
+
+// Fetch a live surface and confirm it shows the corrected value: expect present AND (old) forbid absent.
+async function verifySurface(spec: { url?: string; expect?: string; forbid?: string }): Promise<{ ok: boolean; detail: string }> {
+  if (!spec?.url) return { ok: false, detail: 'no verify url' };
+  try {
+    const res = await fetch(spec.url, { headers: { 'User-Agent': 'SilkExecutor-Verify/1.0 (silkvelvetrecords.com)' } });
+    if (!res.ok) return { ok: false, detail: `fetch ${spec.url} → HTTP ${res.status}` };
+    const html = (await res.text()).toLowerCase();
+    const expect = String(spec.expect ?? '').toLowerCase().trim();
+    const forbid = String(spec.forbid ?? '').toLowerCase().trim();
+    const hasExpect = expect ? html.includes(expect) : true;
+    const hasForbid = forbid ? html.includes(forbid) : false;
+    if (hasExpect && !hasForbid) return { ok: true, detail: `live ${spec.url} shows "${spec.expect}"${forbid ? ` and no longer "${spec.forbid}"` : ''}` };
+    return { ok: false, detail: `live ${spec.url}: expected "${spec.expect}" present=${hasExpect}${forbid ? `, stale "${spec.forbid}" present=${hasForbid}` : ''}` };
+  } catch (e) { return { ok: false, detail: `verify fetch failed: ${e instanceof Error ? e.message : String(e)}` }; }
 }
 
 async function execute(item: any): Promise<void> {
@@ -46,29 +78,37 @@ async function execute(item: any): Promise<void> {
     return markDone(item.id, { ...p, draft_id: r.draft.id, draft_created: true }, `draft created + verified (${r.draft.id})`);
   }
 
-  if (kind === 'answer-cascade') {
-    const field = p.field, answerId = p.answer_id;
-    let ans = '';
-    if (answerId) { const m = await admin.from('mat_answers').select('answer_text').eq('id', answerId).maybeSingle(); ans = m.data?.answer_text ?? ''; }
-    if (!field || !ans) return markError(item.id, p, 'missing field/answer for cascade');
-    const ins = await admin.from('entity_facts').insert({ key: field, value: ans, source: `answer-cascade executed ${new Date().toISOString()}`, confidence: 'verified' }).select('id').single();
-    const proof = await verifyWrite('entity_facts', { id: ins.data?.id });
-    if (answerId) await admin.from('mat_answers').update({ propagation_status: 'complete' }).eq('id', answerId);
-    if (!proof.ok) return markError(item.id, p, proof.detail);
-    return markDone(item.id, p, `entity_facts updated (${field}); repo-file sync journaled as bookkeeping`);
-  }
-
   if (kind === 'audit-initiative' || kind === 'catalog-audit') {
-    // Bounded audit: enumerate the full catalog + journal a finding.
-    const token = await mintOwnerToken();
-    // reuse the silk-chat tool path indirectly is heavy; do a direct summary from §6.
     const { count } = await admin.from('entity_facts').select('id', { count: 'exact', head: true });
-    await admin.from('silk_journal').insert({ entry: `[executor] Audit "${p.focus ?? p.title}" ran. entity_facts rows: ${count}. Findings logged; full catalog scan available via spotify_artist_catalog for deeper passes.`, tags: ['executor', 'audit'] });
+    await admin.from('silk_journal').insert({ entry: `[executor] Audit "${p.focus ?? p.title}" ran. entity_facts rows: ${count}. Findings logged.`, tags: ['executor', 'audit'] });
     return markDone(item.id, p, `audit ran; findings journaled`);
   }
 
-  // Known-but-manual kinds: record execution intent, mark done (no external effect).
-  await admin.from('silk_journal').insert({ entry: `[executor] "${kind}" approved — recorded. No automated executor handler; treated as acknowledged.`, tags: ['executor', 'ack'] });
+  // Fact corrections: (1) write the canonical ledger row + verify it, (2) if the fact names
+  // a public surface, verify the LIVE site before closing — else hold open (never fake "done").
+  if (FACT_KINDS.includes(kind)) {
+    const field = String(p.field ?? kind);
+    let value = '';
+    if (p.answer_id) { const m = await admin.from('mat_answers').select('answer_text').eq('id', p.answer_id).maybeSingle(); value = m.data?.answer_text ?? ''; }
+    value = value || String(p.value ?? p.title ?? '');
+    const ins = await admin.from('entity_facts').insert({ key: field, value, source: `${kind} executed ${new Date().toISOString()}`, confidence: 'verified' }).select('id').single();
+    const led = await verifyWrite('entity_facts', { id: ins.data?.id });
+    if (!led.ok) return markError(item.id, p, `ledger write unverified: ${led.detail}`);
+    if (p.answer_id) await admin.from('mat_answers').update({ propagation_status: 'complete' }).eq('id', p.answer_id);
+
+    const spec = p.verify ?? p.site_check;
+    if (spec?.url) {
+      const v = await verifySurface(spec);
+      if (v.ok) return markDone(item.id, p, `ledger updated (${field}) + LIVE verified: ${v.detail}`);
+      return markAwaitingSite(item.id, p, `field "${field}": ${v.detail}`, { ...spec, found: false, checked_at: new Date().toISOString() });
+    }
+    // No public-surface verify spec → internal-only fact (e.g. real-name → MusicBrainz).
+    // Ledger recorded; public publishing (if any) is a separate, tracked step.
+    return markDone(item.id, p, `ledger updated (${field}); no public-surface verify spec — recorded only`);
+  }
+
+  // Truly unknown kind: acknowledge, don't pretend to have acted on a surface.
+  await admin.from('silk_journal').insert({ entry: `[executor] "${kind}" approved — recorded. No automated handler; acknowledged (no surface change).`, tags: ['executor', 'ack'] });
   return markDone(item.id, p, 'acknowledged (no automated handler)');
 }
 
@@ -78,20 +118,29 @@ Deno.serve(async (req) => {
   let body: { item_id?: string; sweep?: boolean };
   try { body = await req.json(); } catch { body = {}; }
 
-  // Sweep mode (cron): no approved executable item may sit >2 min without done/error.
   if (body.sweep) {
+    // (a) Re-verify items awaiting a live-site publish — auto-close once the site shows it.
+    const { data: waiting } = await admin.from('action_queue').select('*').eq('status', 'approved').eq('payload->>awaiting_site', 'true').limit(40);
+    let closed = 0, stillWaiting = 0;
+    for (const item of waiting ?? []) {
+      const spec = item.payload?.site_check ?? item.payload?.verify;
+      const v = await verifySurface(spec ?? {});
+      if (v.ok) { await markDone(item.id, item.payload, `live site now verified on re-check: ${v.detail}`); closed++; }
+      else { await admin.from('action_queue').update({ payload: { ...item.payload, site_check: { ...(spec ?? {}), found: false, checked_at: new Date().toISOString() } } }).eq('id', item.id); stillWaiting++; }
+    }
+
+    // (b) Execute any approved executable item the trigger didn't (net.http_post can drop).
     const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    const executable = ['corpus-initiative', 'corpus-page', 'answer-cascade', 'audit-initiative', 'catalog-audit', 'metadata-fix'];
-    const { data: stuck } = await admin.from('action_queue').select('*').eq('status', 'approved').in('kind', executable).lt('updated_at', cutoff).limit(20);
+    const { data: stuck } = await admin.from('action_queue').select('*').eq('status', 'approved').in('kind', EXECUTABLE).lt('updated_at', cutoff).limit(20);
     let handled = 0;
     for (const item of stuck ?? []) {
-      if (item.payload?.executed || item.risk_tier === 'red') continue;
+      if (item.payload?.executed || item.payload?.awaiting_site || item.risk_tier === 'red') continue;
       const attempts = (item.payload?.execution_attempts ?? 0) + 1;
       await admin.from('action_queue').update({ payload: { ...item.payload, execution_attempts: attempts } }).eq('id', item.id);
-      if (attempts > 3) { await admin.from('silk_journal').insert({ entry: `[executor-sweeper] Queue item ${item.id} ("${item.payload?.title}") stuck in approved after ${attempts} execution attempts — ALERT for Mat.`, tags: ['executor', 'stuck', 'alert'] }); continue; }
+      if (attempts > 3) { await admin.from('silk_journal').insert({ entry: `[executor-sweeper] Queue item ${item.id} ("${item.payload?.title}") stuck in approved after ${attempts} attempts — ⚠ ALERT for Mat.`, tags: ['executor', 'stuck', 'alert'] }); continue; }
       try { await execute(item); handled++; } catch (e) { await markError(item.id, item.payload ?? {}, e instanceof Error ? e.message : String(e)); }
     }
-    return json({ ok: true, swept: (stuck ?? []).length, handled });
+    return json({ ok: true, awaiting_closed: closed, awaiting_still: stillWaiting, swept: (stuck ?? []).length, handled });
   }
 
   if (!body.item_id) return json({ error: 'item_id required' }, 400);
