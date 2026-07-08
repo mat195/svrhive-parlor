@@ -549,3 +549,9 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .ring-chip-main:hover { background: var(--bg-3); }
 .ring-chip-label { font-size: 0.82rem; } .ring-chip-sub { font-size: 0.68rem; }
 .ring-chip-link { display: flex; align-items: center; padding: 0 0.5rem; background: var(--bg-3); color: var(--gold); text-decoration: none; border-left: 1px solid rgba(185,139,214,0.2); }
+
+/* Revise feedback (DraftCard) — loading + persistent success/error at the revise row */
+.revise-status { font-size: 0.82rem; margin: 0.1rem 0 0.3rem; display: flex; align-items: center; gap: 0.4rem; }
+.revise-status.working { color: var(--gold); }
+.revise-status.ok { color: var(--verified); }
+.revise-status.err { color: var(--err); }

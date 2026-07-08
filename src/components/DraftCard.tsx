@@ -20,6 +20,7 @@ export interface Draft {
   filename: string | null; markdown_body: string | null; status: string;
   mat_note: string | null; ledger_refs: any[]; commit_sha: string | null;
   live_url: string | null; published_at: string | null; retracted_at: string | null;
+  updated_at: string | null;
 }
 
 const STATUS_CLASS: Record<string, string> = {
@@ -49,6 +50,7 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [reviseNote, setReviseNote] = useState('');
+  const [reviseFeedback, setReviseFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [fills, setFills] = useState<Record<string, string>>({});
   const [listening, setListening] = useState(false);
   const recogRef = useRef<any>(null);
@@ -79,7 +81,7 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
         setStats({ visits: v.count ?? 0, cites: c.count ?? 0 });
       })();
     }
-  }, [draft.id, draft.status]);
+  }, [draft.id, draft.status, draft.updated_at]);
 
   // Publish/Retract confirm countdown.
   useEffect(() => {
@@ -150,12 +152,18 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
   async function doRevise() {
     const note = reviseNote.trim();
     if (!note || busy) return;
-    setBusy('revise'); setMsg('');
+    setBusy('revise'); setMsg(''); setReviseFeedback(null);
     try {
       const r = await callFn('foundry-revise', { draft_id: draft.id, note });
       if (!r?.ok) throw new Error(r?.error ?? 'revise failed');
-      setReviseNote(''); toast(`Revised (v${r.version}) — ${r.changed_summary ?? 'updated'}`); onChange();
-    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
+      setReviseNote('');
+      setMode('preview'); // surface the updated content (diff view) immediately
+      setReviseFeedback({ kind: 'ok', text: `Revised to v${r.version} — ${r.changed_summary ?? 'updated'}` });
+      toast(`Revised (v${r.version})`);
+      onChange(); // re-fetch so the draft prop (and diff) reflect the new body
+    } catch (e) {
+      setReviseFeedback({ kind: 'err', text: `Revision failed: ${e instanceof Error ? e.message : String(e)}` });
+    }
     setBusy('');
   }
   function toggleMic() {
@@ -304,6 +312,8 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             {SpeechRec && <button type="button" className={`mic-btn ${listening ? 'live' : ''}`} onClick={toggleMic} title="Dictate">{listening ? '●' : '🎙'}</button>}
             <button className="btn sm" disabled={!reviseNote.trim() || busy === 'revise'} onClick={doRevise}>{busy === 'revise' ? 'Revising…' : 'Revise'}</button>
           </div>
+          {busy === 'revise' && <div className="revise-status working"><span className="pulse" /> Silk is rewriting the page — usually ~10 seconds…</div>}
+          {busy !== 'revise' && reviseFeedback && <div className={`revise-status ${reviseFeedback.kind}`}>{reviseFeedback.kind === 'ok' ? '✓ ' : '⚠ '}{reviseFeedback.text}</div>}
 
           {!isPublished && (
             <div className="what-happens">
