@@ -31,7 +31,7 @@ export default function Ledger() {
       },
     });
     if (error) { toast(`Failed: ${error.message}`); return; }
-    toast('Filed as a corpus proposal → Workshop', async () => { setRoom('workshop'); localStorage.setItem('workshop_tab', 'actions'); });
+    toast(`Filed as a corpus proposal → Workshop (“${r.prompt}”)`, async () => { setRoom('workshop'); localStorage.setItem('workshop_tab', 'actions'); });
   }
 
   const [rows, setRows] = useState<any[]>([]);
