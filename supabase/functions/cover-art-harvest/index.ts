@@ -30,23 +30,38 @@ Deno.serve(async (req) => {
     .select('id, title, release_date, catalog_number, tier, tracks(isrc), cover_art(source_url)')
     .eq('tier', 1);
   const list = (rels ?? []) as any[];
-  const missing = list.filter((r) => !(r.cover_art?.[0]?.source_url) && r.tracks?.[0]?.isrc);
+  const missing = list.filter((r) => !(r.cover_art?.[0]?.source_url));
 
   const PER_RUN = 40;
+  const ARTIST = 'Lucius P. Thundercat';
   const out: any[] = [];
   let fetched = 0, rateLimited = false;
   for (const rel of missing) {
     if (fetched >= PER_RUN) break;
     fetched++;
-    const isrc = rel.tracks[0].isrc;
-    const r = await fetch(`https://api.spotify.com/v1/search?q=isrc:${encodeURIComponent(isrc)}&type=track&market=US&limit=1`, { headers: { Authorization: `Bearer ${tok}` } });
-    if (r.status === 429) { rateLimited = true; break; }
-    if (!r.ok) { await new Promise((s) => setTimeout(s, 150)); continue; }
-    const track = (await r.json())?.tracks?.items?.[0];
-    const url = (track?.album?.images ?? [])[0]?.url ?? null;
+    const isrc = rel.tracks?.[0]?.isrc;
+    // ISRC track-search (returns album image inline); else fall back to album-title search
+    // (packs like "Love Pack : Tokyo Drift" have no ISRC of their own).
+    let album: any = null;
+    if (isrc) {
+      const r = await fetch(`https://api.spotify.com/v1/search?q=isrc:${encodeURIComponent(isrc)}&type=track&market=US&limit=1`, { headers: { Authorization: `Bearer ${tok}` } });
+      if (r.status === 429) { rateLimited = true; break; }
+      if (r.ok) album = (await r.json())?.tracks?.items?.[0]?.album ?? null;
+    }
+    if (!album) {
+      const q = encodeURIComponent(`album:${rel.title} artist:${ARTIST}`);
+      const r = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=album&market=US&limit=3`, { headers: { Authorization: `Bearer ${tok}` } });
+      if (r.status === 429) { rateLimited = true; break; }
+      if (r.ok) {
+        const items = (await r.json())?.albums?.items ?? [];
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        album = items.find((a: any) => norm(a.name) === norm(rel.title)) ?? items.find((a: any) => (a.artists ?? []).some((x: any) => norm(x.name) === norm(ARTIST))) ?? null;
+      }
+    }
+    const url = (album?.images ?? [])[0]?.url ?? null;
     if (url) {
       await admin.from('cover_art').upsert({ release_id: rel.id, slug: '', source_url: url, fetched_at: new Date().toISOString() }, { onConflict: 'release_id' });
-      if (track?.album?.id) await admin.from('releases').update({ spotify_album_id: track.album.id }).eq('id', rel.id);
+      if (album?.id) await admin.from('releases').update({ spotify_album_id: album.id }).eq('id', rel.id);
       out.push({ id: rel.id, title: rel.title, catalog_number: rel.catalog_number, image_url: url });
     }
     await new Promise((s) => setTimeout(s, 150));
