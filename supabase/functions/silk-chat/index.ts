@@ -157,6 +157,12 @@ Deno.serve(async (req) => {
         : `Mat replied "${message}" → REJECTED your open loop: "${loop.description}". Confirm briefly.`;
       await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'resolve', description: `${affirm ? 'approved' : 'rejected'}: ${loop.description}`, item_id: loop.item_id });
       openLoops = openLoops.slice(0, -1);
+    } else if (!loop.item_id) {
+      // Conversational question loop (no queue item) — Mat's short reply IS the answer to
+      // the question Silk asked one message ago. This is the case that kept failing.
+      resolutionNote = `Mat's message "${message}" is his ANSWER to the question you asked him one message ago:\n  "${loop.description}"\nYou already have BOTH the question (above) and his answer ("${message}") — do NOT look either up in any table or tool; everything you need is right here. Just apply his answer to that specific question and confirm in one line. Do NOT reinterpret it as a new request or start an unrelated task, scan, or report.`;
+      await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'resolve', description: `answered: ${loop.description}` });
+      openLoops = openLoops.slice(0, -1);
     }
   }
   // Fallback (P0-1 hardening): a bare resolution with no pinned loop still resolves the
@@ -177,9 +183,10 @@ Deno.serve(async (req) => {
     }
   }
   const openLoopsBlock = openLoops.length
-    ? `--- AWAITING MAT (open loops — resolve short replies against the NEWEST) ---\n${openLoops.map((l, i) => `${i + 1}. ${l.description}${l.options_offered ? ` [${l.options_offered}]` : ''}`).join('\n')}\nShort replies like "approve"/"yes"/"2" resolve against these.\n\n`
+    ? `--- AWAITING MAT · OPEN LOOPS (newest last) ---\n${openLoops.map((l, i) => `${i + 1}. ${l.description}${l.options_offered ? ` [${l.options_offered}]` : ''}`).join('\n')}\n` +
+      `BINDING RULE: if Mat's message is short or ambiguous (e.g. "yes", "no", "ok", "sure", "do it", "hold", a single number, or a bare name), it is almost certainly ANSWERING the NEWEST loop above. Resolve it against that loop FIRST, before considering any other interpretation. Do NOT start a new/unrelated task in response to a short reply.\n\n`
     : '';
-  const resolutionBlock = resolutionNote ? `--- LOOP RESOLUTION (act on this) ---\n${resolutionNote}\n\n` : '';
+  const resolutionBlock = resolutionNote ? `--- LOOP RESOLUTION · DO THIS FIRST ---\n${resolutionNote}\nThis is the single most important instruction for this turn. Ignore any impulse to run an unrelated report or scan.\n\n` : '';
 
   // L-session (P1-5): current-session truth — the session log — ALWAYS at the very top,
   // before any retrieval. This is truth, never from vector recall.
@@ -213,7 +220,8 @@ Deno.serve(async (req) => {
   // schedule-vs-now reasoning (e.g. a next_attempt_at timestamp).
   const now = new Date();
   const nowBlock = `\n\n--- CURRENT TIME ---\nNow: ${now.toISOString()} (UTC). Anchor every date/time judgement to this — is X past or future, how long ago, how stale, has a scheduled time passed. Never guess the current date or time.`;
-  const dynamicText = nowBlock + resolutionBlock + openLoopsBlock + sessionLog + built.dynamic + operatingRules;
+  // Resolution + open loops lead the dynamic tail (highest priority for the turn), then now/session/etc.
+  const dynamicText = resolutionBlock + openLoopsBlock + nowBlock + sessionLog + built.dynamic + operatingRules;
   const system: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
     { type: 'text', text: built.stable, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: dynamicText },
@@ -311,6 +319,7 @@ Deno.serve(async (req) => {
         // Never ship an empty reply (heavy agent loops can exhaust their turn budget).
         if (!full.trim()) full = "I ran long on that one and didn't finish cleanly — ask me for one specific piece and I'll nail it.";
 
+        let filedThisTurn = false;
         if (toolTrace.length) {
           sse(controller, 'tools', { used: toolTrace.map((t) => t.name) });
           // Session log (P0-1): current-session truth, append-only — never from retrieval.
@@ -320,7 +329,26 @@ Deno.serve(async (req) => {
             if (t.name === 'queue_for_approval' && (t.result as any)?.item_id) {
               openLoops.push({ type: 'approval', item_id: (t.result as any).item_id, description: (t.result as any).description ?? 'a proposed action', created_at: new Date().toISOString() });
               await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'filing', description: (t.result as any).description, item_id: (t.result as any).item_id });
+              filedThisTurn = true;
             }
+          }
+        }
+        // P0-1 FIX: pin a CONVERSATIONAL open loop when Silk asks Mat a question directly
+        // (no queue item). This is where most of Mat's short replies land — and where the
+        // pin was missing. Skip if Silk just filed a queue item (that's the actionable loop)
+        // or if this turn already resolved a loop.
+        if (!filedThisTurn && !resolutionNote) {
+          const asksMat = /\?\s*("[^"]*")?\s*$/.test(full.trim())
+            || /\b(should I|do you want me to|want me to|shall I|which (one|of|do)|would you (like|prefer)|prefer .* or |, or |confirm\?|right\?|ok\?)\b/i.test(full);
+          if (asksMat) {
+            // Pin the question WITH its context (up to ~350 chars before the final "?"),
+            // so the loop carries the SUBJECT ("lock Hate Fuck as flagship — is that correct?"),
+            // not a bare "Is that correct?" that leaves Silk hunting for what it meant.
+            const tail = full.trim();
+            const qEnd = tail.lastIndexOf('?');
+            const q = (qEnd >= 0 ? tail.slice(Math.max(0, qEnd - 350), qEnd + 1) : tail.slice(-300)).trim();
+            openLoops.push({ type: 'question', description: q, created_at: new Date().toISOString() });
+            await admin.from('silk_session_events').insert({ session_id: sessionId, event_type: 'question', description: q.slice(0, 200) });
           }
         }
         // Self-detected truncation → journal a config gap (never silently cut off).
