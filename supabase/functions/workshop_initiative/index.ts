@@ -8,6 +8,7 @@ import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
 import { verifyWrite, loadConfig } from '../_shared/silk.ts';
 import { startStatus, endStatus } from '../_shared/status.ts';
 import { riskTier } from '../_shared/risk.ts';
+import { fileQueueItem } from '../_shared/queue.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const CRON_KEY = Deno.env.get('CRON_KEY') ?? '';
@@ -65,13 +66,13 @@ Deno.serve(async (req) => {
   for (const c of (out.corpus ?? []).slice(0, 3)) {
     if (!c?.target_query || existingCorpus.has(norm(c.target_query))) continue;
     existingCorpus.add(norm(c.target_query));
-    const { data } = await admin.from('action_queue').insert({ kind: 'corpus-initiative', status: 'proposed', risk_tier: riskTier('corpus-initiative'), payload: { title: `Corpus page: ${c.target_query}`, target_query: c.target_query, rationale: c.rationale, generated_by: 'workshop_initiative', priority: 2 } }).select('id').single();
-    if (data?.id) { filed++; ids.push(data.id); }
+    const r = await fileQueueItem({ kind: 'corpus-initiative', risk_tier: riskTier('corpus-initiative'), payload: { title: `Corpus page: ${c.target_query}`, target_query: c.target_query, rationale: c.rationale, generated_by: 'workshop_initiative', priority: 2 } });
+    if (r.filed && r.id) { filed++; ids.push(r.id); }
   }
   // Audit (max 1).
   if (out.audit?.focus) {
-    const { data } = await admin.from('action_queue').insert({ kind: 'audit-initiative', status: 'proposed', risk_tier: riskTier('audit-initiative'), payload: { title: `Audit: ${out.audit.focus}`, focus: out.audit.focus, rationale: out.audit.rationale, generated_by: 'workshop_initiative', priority: 2 } }).select('id').single();
-    if (data?.id) { filed++; ids.push(data.id); }
+    const r = await fileQueueItem({ kind: 'audit-initiative', risk_tier: riskTier('audit-initiative'), maxPerDay: 1, payload: { title: `Audit: ${out.audit.focus}`, focus: out.audit.focus, rationale: out.audit.rationale, generated_by: 'workshop_initiative', priority: 2 } });
+    if (r.filed && r.id) { filed++; ids.push(r.id); }
   }
   // Strategic question (dedup, max 1).
   if (out.question?.question && !existingQuestions.has(norm(out.question.question))) {

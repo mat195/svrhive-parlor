@@ -6,6 +6,7 @@
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { buildSystemPrompt } from '../_shared/prompt_builder.ts';
 import { verifyWrite } from '../_shared/silk.ts';
+import { fileQueueItem } from '../_shared/queue.ts';
 import { startStatus, endStatus } from '../_shared/status.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
@@ -47,14 +48,14 @@ Deno.serve(async (req) => {
   } catch (e) { await endStatus(statusId, false); return json({ error: 'consolidation failed: ' + (e instanceof Error ? e.message : String(e)) }, 500); }
 
   const nP = out.promotions?.length ?? 0, nD = out.doctrine_additions?.length ?? 0, nA = out.archive_candidates?.length ?? 0;
-  const { data: qi } = await admin.from('action_queue').insert({
-    kind: 'weekly-consolidation', status: 'proposed', risk_tier: 'amber',
+  const qi = await fileQueueItem({
+    kind: 'weekly-consolidation', risk_tier: 'amber', maxPerDay: 1,
     payload: {
       title: `Weekly consolidation — ${nP} promotion${nP !== 1 ? 's' : ''}, ${nD} doctrine, ${nA} to archive`,
       rationale: out.summary, promotions: out.promotions, doctrine_additions: out.doctrine_additions,
       archive_candidates: out.archive_candidates, priority: 2,
     },
-  }).select('id').single();
+  });
 
   const proof = qi?.id ? await verifyWrite('action_queue', { id: qi.id }) : { ok: false, detail: 'no queue id' };
   await admin.from('silk_journal').insert({ entry: `Weekly consolidation: ${out.summary || 'reviewed the week'} — proposed ${nP} promotion(s), ${nD} doctrine addition(s), ${nA} archive(s) for your one-pass review.`, tags: ['consolidation', 'weekly', 'brief-seven'] });

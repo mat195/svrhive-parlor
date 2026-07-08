@@ -12,6 +12,7 @@
 //
 // When complete it journals the SVR split, files a §2 proposal, and pings Discord.
 import { admin, json, CORS } from '../_shared/auth.ts';
+import { fileQueueItem } from '../_shared/queue.ts';
 
 const CRON_KEY = Deno.env.get('CRON_KEY') ?? '';
 const CID = Deno.env.get('SPOTIFY_CLIENT_ID') ?? '';
@@ -119,11 +120,23 @@ Deno.serve(async (req) => {
   const res = (Object.values(state.results) as any[]).filter((r) => !r.missing);
   const yes = res.filter((r) => r.svr).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
   const no = res.filter((r) => !r.svr);
+
+  // DEGENERATE GUARD: 0 albums enumerated is not a finding — it means enumeration
+  // returned nothing (Spotify rate limit / stale catalog approach), not "0 of 0 pass".
+  // Do NOT file a 0/0 metadata-fix; journal it and throttle 24h so the hourly cron
+  // stops re-running (keep status 'running' + a day-out next_attempt_at → gate skips).
+  if (res.length === 0) {
+    state.next_attempt_at = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    await save(cp.id, state, { note: 'enumerated 0 albums — degenerate, not filing; throttled 24h' });
+    await admin.from('silk_journal').insert({ entry: '[label-sweep] enumerated 0 albums (rate-limited or catalog approach stale) — skipped filing a 0/0 §2 metadata-fix; throttled 24h.', tags: ['label-sweep', 'degenerate', 'skipped'] });
+    return json({ ok: true, degenerate: true, note: 'enumerated 0; not filed; throttled 24h' });
+  }
+
   await admin.from('silk_task_checkpoints').update({ status: 'done', note: `${res.length} releases · ${yes.length} SVR`, updated_at: new Date().toISOString() }).eq('id', cp.id);
   await admin.from('entity_facts').insert({ key: '§2 label association (Spotify sweep)', value: `${yes.length}/${res.length} primary releases carry Silk Velvet Records in label/copyright (e.g. ${yes.slice(0, 5).map((r) => r.title).join(', ')})`, source: 'Spotify catalog label sweep', confidence: 'verified' });
   await admin.from('silk_journal').insert({ entry: `Catalog label sweep complete: ${yes.length}/${res.length} primary releases show Silk Velvet Records (label or © line). SVR: ${yes.map((r) => r.title).join(', ')}. This contradicts §2's "no public association found" — the association is already live on ${yes.length} releases.`, tags: ['catalog', 'label-sweep', 'svr', 'finding'] });
-  await admin.from('action_queue').insert({ kind: 'metadata-fix', status: 'proposed', risk_tier: 'amber', payload: { title: `§2 label: ${yes.length}/${res.length} releases already show Silk Velvet Records`, generated_by: 'label-sweep', rationale: `Spotify sweep: ${yes.length} of ${res.length} primary releases carry Silk Velvet Records in label/copyright. Update §2 (currently "no public association found") to reflect the confirmed association. Releases: ${yes.map((r) => `${r.title} (${r.date})`).join('; ')}.`, svr_releases: yes.map((r) => ({ title: r.title, date: r.date, label: r.label, copyright: r.cr })), non_svr_count: no.length } });
-  if (DISCORD) await fetch(DISCORD, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🏷️ **Catalog label sweep done** — ${yes.length}/${res.length} of LPT's primary releases already show **Silk Velvet Records**. A §2-update proposal is waiting in your Workshop queue. — Silk` }) }).catch(() => {});
+  const filed = await fileQueueItem({ kind: 'metadata-fix', risk_tier: 'amber', maxPerDay: 1, payload: { title: `§2 label: ${yes.length}/${res.length} releases already show Silk Velvet Records`, generated_by: 'label-sweep', rationale: `Spotify sweep: ${yes.length} of ${res.length} primary releases carry Silk Velvet Records in label/copyright. Update §2 (currently "no public association found") to reflect the confirmed association. Releases: ${yes.map((r) => `${r.title} (${r.date})`).join('; ')}.`, svr_releases: yes.map((r) => ({ title: r.title, date: r.date, label: r.label, copyright: r.cr })), non_svr_count: no.length } });
+  if (DISCORD && filed.filed) await fetch(DISCORD, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🏷️ **Catalog label sweep done** — ${yes.length}/${res.length} of LPT's primary releases already show **Silk Velvet Records**. A §2-update proposal is waiting in your Workshop queue. — Silk` }) }).catch(() => {});
 
-  return json({ ok: true, done: true, total: res.length, svr: yes.length, svr_titles: yes.map((r) => r.title) });
+  return json({ ok: true, done: true, total: res.length, svr: yes.length, svr_titles: yes.map((r) => r.title), filed });
 });

@@ -7,6 +7,7 @@
 // ledger_query_* (Layer 5 observations). All read-only.
 import { admin } from './auth.ts';
 import { retrieve } from './journal.ts';
+import { fileQueueItem } from './queue.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -238,8 +239,8 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
     if (name === 'spotify_track_details') return await spotifyTrackDetails(String(input.query ?? ''));
     if (name === 'queue_for_approval') {
       const kind = ['corpus-initiative', 'audit-initiative', 'metadata-fix', 'catalog-audit'].includes(String(input.kind)) ? String(input.kind) : 'corpus-initiative';
-      const { data } = await admin.from('action_queue').insert({ kind, status: 'proposed', risk_tier: 'amber', payload: { title: String(input.description ?? ''), target_query: input.target_query ?? null, generated_by: 'silk-chat', description: input.description } }).select('id').single();
-      return { item_id: data?.id, kind, description: input.description, filed: true };
+      const r = await fileQueueItem({ kind, risk_tier: 'amber', payload: { title: String(input.description ?? ''), target_query: input.target_query ?? null, generated_by: 'silk-chat', description: input.description } });
+      return { item_id: r.id, kind, description: input.description, filed: r.filed, deduped: !r.filed, note: r.reason };
     }
     if (name === 'read_config_file') return await readConfigFile(String(input.path ?? ''));
     if (name === 'get_action_queue_item') return await getRecord('action_queue', String(input.id ?? ''));

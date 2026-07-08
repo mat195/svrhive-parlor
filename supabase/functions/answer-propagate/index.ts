@@ -5,6 +5,7 @@
 //  4. link the journal back to the answer. Owner-only.
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { verifyWrite } from '../_shared/silk.ts';
+import { fileQueueItem } from '../_shared/queue.ts';
 
 // Map a question's node_key → (entity-master field, downstream surfaces).
 function cascade(nodeKey: string): { field: string; surfaces: string[] } {
@@ -58,8 +59,8 @@ Deno.serve(async (req) => {
   }).select('id').single();
 
   if (shouldQueue) {
-    await admin.from('action_queue').insert({
-      kind: 'answer-cascade', status: 'proposed', risk_tier: 'amber',
+    await fileQueueItem({
+      kind: 'answer-cascade', risk_tier: 'amber',
       payload: {
         title: `Answer → review ${surfaces.length} surface${surfaces.length > 1 ? 's' : ''}${contradicts ? ' (contradiction)' : ''}`,
         rationale: `You answered: "${q.question}" → "${body.answer}".\nThis updates entity-master field "${field}" and should propagate to:\n${surfaces.map((s) => '• ' + s).join('\n')}\n${contradicts ? `\n⚠ This CONTRADICTS an existing verified fact ("${existing![0].value}"). Approve to supersede.\n` : ''}\nApprove to authorize the cascade. Reject if it shouldn't propagate.`,
