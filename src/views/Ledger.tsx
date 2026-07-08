@@ -3,9 +3,10 @@ import { supabase } from '../lib/supabase';
 import { useToast } from '../components/Toast';
 import { useSilk } from '../SilkContext';
 
-type Tab = 'results' | 'runs' | 'journal' | 'mentions' | 'metrics' | 'assemblies';
+type Tab = 'results' | 'tracks' | 'runs' | 'journal' | 'mentions' | 'metrics' | 'assemblies';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'results', label: 'Results' },
+  { id: 'tracks', label: 'Top Tracks' },
   { id: 'runs', label: 'Runs' },
   { id: 'journal', label: 'Journal' },
   { id: 'mentions', label: 'Mentions' },
@@ -55,6 +56,8 @@ export default function Ledger() {
         if (engine) q = q.eq('engine', engine);
         if (onlyMentioned) q = q.eq('mentioned', true);
         q = q.order('created_at', { ascending: false }).limit(limit);
+      } else if (tab === 'tracks') {
+        q = supabase.from('releases').select('id, title, release_date, streams, tier, label_credit').order('streams', { ascending: false, nullsFirst: false }).limit(limit);
       } else if (tab === 'runs') {
         q = supabase.from('visibility_runs').select('id, run_at, prompt_count, mentions_total, label_mentions_total, notes').order('run_at', { ascending: false }).limit(limit);
       } else if (tab === 'journal') {
@@ -123,6 +126,15 @@ function renderRow(tab: Tab, r: any, onTarget?: (r: any) => void) {
       </>
     );
   }
+  if (tab === 'tracks') return (
+    <>
+      <div className="row-head">
+        <span className="row-title">{r.title}</span>
+        <span className="num" style={{ fontWeight: 600 }}>{r.streams != null ? Number(r.streams).toLocaleString() : '—'} <span className="muted small">streams</span></span>
+      </div>
+      <div className="muted small">{String(r.release_date).slice(0, 10)}{r.label_credit ? ` · ${r.label_credit}` : ''}{r.tier === 4 ? ' · withdrawn' : ''}</div>
+    </>
+  );
   if (tab === 'runs') return <><div className="row-title">{r.mentions_total}/{r.prompt_count} · {String(r.run_at).slice(0, 16).replace('T', ' ')}</div><div className="muted small">label {r.label_mentions_total} · {r.notes}</div></>;
   if (tab === 'journal') return <><div>{r.entry}</div><div className="muted small">{(r.tags ?? []).join(' · ')} · {String(r.created_at).slice(0, 10)}</div></>;
   if (tab === 'mentions') return <><a href={r.url} target="_blank" rel="noopener">{r.url}</a><div className="muted small">{r.source} · {r.query}</div></>;

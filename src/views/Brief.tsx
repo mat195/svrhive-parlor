@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
 import { useSilk } from '../SilkContext';
 import { useToast } from '../components/Toast';
+import AudienceChart from '../components/AudienceChart';
 
 function startOfWeek() { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString(); }
 
@@ -24,7 +25,7 @@ export default function Brief() {
   const [moment, setMoment] = useState<Moment | null>(null);
   const [sheet, setSheet] = useState(false);
   const [live, setLive] = useState(false);
-  const [counters, setCounters] = useState({ followers: 0, followersCollected: false, mentions: 0, ai: 0 });
+  const [counters, setCounters] = useState({ followers: 0, followersCollected: false, monthly: 0, monthlyCollected: false, mentions: 0, ai: 0 });
 
   const load = useCallback(async () => {
     const { data: r } = await supabase.from('visibility_runs').select('run_at, mentions_total, prompt_count, summary').order('run_at', { ascending: false }).limit(2);
@@ -41,12 +42,17 @@ export default function Brief() {
       proposal: top.payload?.rationale ?? 'Open this in the Workshop.',
       button: BUTTON_BY_KIND[top.kind] ?? 'Open in Workshop',
     } : null);
-    const [fol, men, ai] = await Promise.all([
+    const [fol, ml, men, ai] = await Promise.all([
       supabase.from('metrics_snapshots').select('value').eq('metric', 'followers').order('captured_at', { ascending: false }).limit(1),
+      supabase.from('metrics_snapshots').select('value').eq('metric', 'monthly_listeners').order('captured_at', { ascending: false }).limit(1),
       supabase.from('mentions_ledger').select('id', { count: 'exact', head: true }).gte('found_at', startOfWeek()),
       supabase.from('site_visits').select('id', { count: 'exact', head: true }).eq('is_ai_referrer', true).gte('ts', startOfWeek()),
     ]);
-    setCounters({ followers: Number(fol.data?.[0]?.value ?? 0), followersCollected: !!fol.data?.length, mentions: men.count ?? 0, ai: ai.count ?? 0 });
+    setCounters({
+      followers: Number(fol.data?.[0]?.value ?? 0), followersCollected: !!fol.data?.length,
+      monthly: Number(ml.data?.[0]?.value ?? 0), monthlyCollected: !!ml.data?.length,
+      mentions: men.count ?? 0, ai: ai.count ?? 0,
+    });
     // Overnight initiatives Silk queued (workshop_initiative).
     const init = await supabase.from('action_queue').select('id', { count: 'exact', head: true }).eq('status', 'proposed').eq('payload->>generated_by', 'workshop_initiative');
     setInitiatives(init.count ?? 0);
@@ -145,14 +151,14 @@ export default function Brief() {
 
       <div className="brief-counters">
         <div className="bc">
-          <div className="n num">{counters.followersCollected ? counters.followers : '—'}</div>
-          <div className="muted small">followers</div>
-          <div className="muted" style={{ fontSize: '0.68rem' }}>{counters.followersCollected ? 'this week' : 'Spotify pull pending'}</div>
+          <div className="n num">{counters.monthlyCollected ? counters.monthly.toLocaleString() : '—'}</div>
+          <div className="muted small">monthly listeners</div>
+          <div className="muted" style={{ fontSize: '0.68rem' }}>{counters.monthlyCollected ? 'Spotify · current' : 'no pull yet'}</div>
         </div>
         <div className="bc">
-          <div className="n num">{counters.mentions}</div>
-          <div className="muted small">new mentions</div>
-          <div className="muted" style={{ fontSize: '0.68rem' }}>{counters.mentions === 0 ? 'none yet — I scan public pages' : 'this week'}</div>
+          <div className="n num">{counters.followersCollected ? counters.followers.toLocaleString() : '—'}</div>
+          <div className="muted small">followers</div>
+          <div className="muted" style={{ fontSize: '0.68rem' }}>{counters.followersCollected ? 'Spotify · current' : 'no pull yet'}</div>
         </div>
         <div className="bc">
           <div className="n num">{counters.ai}</div>
@@ -160,6 +166,8 @@ export default function Brief() {
           <div className="muted" style={{ fontSize: '0.68rem' }}>{counters.ai === 0 ? "waiting for first — I'll ping Discord" : 'this week'}</div>
         </div>
       </div>
+
+      <AudienceChart />
 
       {sheet && moment && (
         <div className="modal-backdrop" onClick={() => setSheet(false)}>

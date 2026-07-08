@@ -359,6 +359,17 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .attach-chip { display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 0.2rem 0.45rem; font-size: 0.78rem; }
 .attach-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0; }
 .attach-x:hover { color: var(--err); }
+/* Audience chart */
+.audience-chart { margin: 0.4rem 0; }
+.ac-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
+.ac-svg { width: 100%; height: auto; display: block; }
+.ac-axis { stroke: rgba(255,255,255,0.12); stroke-width: 1; }
+.ac-line { fill: none; stroke: var(--gold); stroke-width: 2; }
+.ac-area { fill: rgba(212,175,55,0.10); stroke: none; }
+.ac-peak { fill: var(--gold); }
+.ac-spike { fill: var(--verified); }
+.ac-ytick, .ac-xtick { fill: var(--muted); font-size: 8px; }
+.ac-note { margin-top: 0.2rem; }
 
 /* Listings */
 .sprint { text-align: left; } .sprint.ok { border-color: var(--verified); }
