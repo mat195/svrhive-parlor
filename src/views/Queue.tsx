@@ -104,7 +104,8 @@ export default function Queue() {
         status: 'approved',
         payload: { ...item.payload, decided_at: new Date().toISOString(), draft_id: r.draft.id, draft_created: true, write_proof: r.write_proof, approval_error: null },
       }).eq('id', item.id);
-      toast('Draft created → Workshop → Drafts');
+      const slug = String(r.draft.filename ?? '').replace(/\.md$/, '');
+      toast(`Draft created → Workshop → Drafts${slug ? ` (notes/${slug})` : ''}`);
     } catch (e) {
       // Do NOT approve. Keep in queue, surface the error.
       await supabase.from('action_queue').update({
