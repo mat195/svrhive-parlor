@@ -449,3 +449,15 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .silkchat-menu li button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); padding: 0.4rem 0.5rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
 .silkchat-menu li button:hover { background: rgba(255,255,255,0.05); }
 .silkchat-menu li button.active { color: var(--gold); }
+
+/* Grant Opportunities (Workshop → Grants) — relevance left-border mirrors risk-cards. */
+.card.grant { position: relative; }
+.card.grant.rel-fit { border-left: 2px solid rgba(143,209,158,0.4); }
+.card.grant.rel-maybe { border-left: 2px solid rgba(224,179,79,0.35); }
+.card.grant.rel-not_eligible { border-left: 2px solid rgba(154,154,154,0.3); opacity: 0.82; }
+.grant-rel.rel-fit { color: #8fd19e; }
+.grant-rel.rel-maybe { color: #e0b34f; }
+.grant-rel.rel-not_eligible { color: var(--muted); }
+.grant-deadline.tone-soon { color: #e0b34f; }
+.grant-deadline.tone-past { color: var(--muted); text-decoration: line-through; }
+.grant-deadline.tone-rolling { color: var(--muted); font-weight: 500 !important; }

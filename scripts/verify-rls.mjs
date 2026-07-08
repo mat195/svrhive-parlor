@@ -19,6 +19,7 @@ const TABLES = [
   'parlor_chats', 'parlor_messages',
   'site_visits', 'run_deltas', 'corpus_drafts', 'corpus_draft_versions',
   'listing_wizards', 'listing_progress', 'brain_positions', 'silk_focus', 'silk_questions', 'mat_answers', 'web_fetch_cache', 'web_fetches', 'silk_status',
+  'grant_opportunities',
 ];
 
 let ok = true;
