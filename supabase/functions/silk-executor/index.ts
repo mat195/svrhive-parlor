@@ -67,8 +67,13 @@ async function execute(item: any): Promise<void> {
   const kind = item.kind;
 
   if (kind === 'corpus-initiative' || kind === 'corpus-page') {
+    // Already has a generated draft that exists? Close it — don't regenerate a duplicate.
+    if (p.draft_id) {
+      const have = await verifyWrite('corpus_drafts', { id: p.draft_id });
+      if (have.ok) return markDone(item.id, { ...p, draft_created: true }, `draft already exists (${p.draft_id}); nothing to regenerate`);
+    }
     const q = String(p.target_query ?? '').trim();
-    if (!q) return markError(item.id, p, 'no target_query on item');
+    if (!q) return markError(item.id, p, 'no target_query on item (and no existing draft to attach)');
     const token = await mintOwnerToken();
     if (!token) return markError(item.id, p, 'could not mint owner token');
     const r = await (await fetch(`${SUPABASE_URL}/functions/v1/foundry-generate`, { method: 'POST', headers: { apikey: ANON, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ target_query: q }) })).json();
@@ -135,15 +140,21 @@ Deno.serve(async (req) => {
     // un-executed >2min after creation is stuck; fresh items are `proposed`, not `approved`.
     const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
     const { data: stuck } = await admin.from('action_queue').select('*').eq('status', 'approved').in('kind', EXECUTABLE).lt('created_at', cutoff).limit(20);
-    let handled = 0;
+    let handled = 0, gaveUp = 0;
     for (const item of stuck ?? []) {
-      if (item.payload?.executed || item.payload?.awaiting_site || item.risk_tier === 'red') continue;
+      // Skip already-resolved and permanently-given-up items (no churn, no repeat alerts).
+      if (item.payload?.executed || item.payload?.awaiting_site || item.payload?.execution_giveup || item.risk_tier === 'red') continue;
       const attempts = (item.payload?.execution_attempts ?? 0) + 1;
+      if (attempts > 3) {
+        // Give up: mark terminal so future sweeps skip it, and alert ONCE (not every run).
+        await admin.from('action_queue').update({ payload: { ...item.payload, execution_attempts: attempts, execution_giveup: true } }).eq('id', item.id);
+        await admin.from('silk_journal').insert({ entry: `[executor-sweeper] Queue item ${item.id} ("${item.payload?.title}") could not execute after ${attempts - 1} attempts (${item.payload?.execution_error ?? 'unknown error'}) — giving up; needs Mat. ⚠`, tags: ['executor', 'stuck', 'alert'] });
+        gaveUp++; continue;
+      }
       await admin.from('action_queue').update({ payload: { ...item.payload, execution_attempts: attempts } }).eq('id', item.id);
-      if (attempts > 3) { await admin.from('silk_journal').insert({ entry: `[executor-sweeper] Queue item ${item.id} ("${item.payload?.title}") stuck in approved after ${attempts} attempts — ⚠ ALERT for Mat.`, tags: ['executor', 'stuck', 'alert'] }); continue; }
       try { await execute(item); handled++; } catch (e) { await markError(item.id, item.payload ?? {}, e instanceof Error ? e.message : String(e)); }
     }
-    return json({ ok: true, awaiting_closed: closed, awaiting_still: stillWaiting, swept: (stuck ?? []).length, handled });
+    return json({ ok: true, awaiting_closed: closed, awaiting_still: stillWaiting, swept: (stuck ?? []).length, handled, gave_up: gaveUp });
   }
 
   if (!body.item_id) return json({ error: 'item_id required' }, 400);

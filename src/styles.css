@@ -461,3 +461,35 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .grant-deadline.tone-soon { color: #e0b34f; }
 .grant-deadline.tone-past { color: var(--muted); text-decoration: line-through; }
 .grant-deadline.tone-rolling { color: var(--muted); font-weight: 500 !important; }
+
+/* ── Brief zones (campaign health vs system health) ─────────────────────────── */
+.zone { display: block; }
+.zone-campaign { position: relative; }
+.zone-tag { font-family: var(--sans); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.5rem; }
+.delta.flat { color: var(--muted); }
+
+/* week-over-week trend arrows on tiles */
+.trend { font-size: 0.95rem; font-family: var(--sans); vertical-align: middle; }
+.trend.up { color: var(--verified); } .trend.down { color: var(--err); } .trend.flat { color: var(--muted); }
+
+/* AI-referral explainer (shown while count is 0 so it doesn't read as broken) */
+.ai-explainer { margin-top: 0.7rem; font-size: 0.82rem; line-height: 1.55; color: var(--muted); background: rgba(201,169,97,0.07); border: 1px solid rgba(201,169,97,0.2); border-radius: 10px; padding: 0.7rem 0.85rem; }
+.ai-explainer strong { color: var(--ink); }
+
+/* Zone 2 — system health: visually quieter, set apart, collapsed by default */
+.zone-health { margin-top: 1.6rem; border-top: 1px solid rgba(185,139,214,0.14); padding-top: 1rem; }
+.sys-summary { display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid rgba(185,139,214,0.16); border-radius: 10px; padding: 0.6rem 0.8rem; color: var(--ink); cursor: pointer; font-size: 0.9rem; }
+.sys-summary:hover { border-color: rgba(185,139,214,0.3); }
+.sys-title { font-weight: 600; }
+.sys-line { margin-left: 0.1rem; }
+.sys-summary .chev { margin-left: auto; color: var(--muted); }
+.sys-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.sys-dot.ok { background: var(--verified); box-shadow: 0 0 6px rgba(138,155,106,0.5); }
+.sys-dot.bad { background: var(--err); box-shadow: 0 0 6px rgba(201,138,138,0.5); }
+.sys-dot.warn { background: var(--gold); }
+.sys-body { padding: 0.4rem 0.2rem 0; }
+.sys-issue { border: 1px solid rgba(185,139,214,0.14); border-radius: 8px; padding: 0.55rem 0.7rem; margin-top: 0.5rem; }
+.sys-issue.error { border-left: 2px solid var(--err); }
+.sys-issue.wait { border-left: 2px solid var(--gold); }
+.sys-issue-main { display: flex; align-items: center; gap: 0.5rem; font-size: 0.86rem; }
+.sys-issue-actions { display: flex; gap: 0.9rem; margin: 0.35rem 0 0 1rem; }
