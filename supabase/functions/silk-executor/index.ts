@@ -130,8 +130,11 @@ Deno.serve(async (req) => {
     }
 
     // (b) Execute any approved executable item the trigger didn't (net.http_post can drop).
+    // Filter on created_at — action_queue has no updated_at column (a phantom-column filter
+    // was why the original sweep always returned nothing). An item still `approved` and
+    // un-executed >2min after creation is stuck; fresh items are `proposed`, not `approved`.
     const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    const { data: stuck } = await admin.from('action_queue').select('*').eq('status', 'approved').in('kind', EXECUTABLE).lt('updated_at', cutoff).limit(20);
+    const { data: stuck } = await admin.from('action_queue').select('*').eq('status', 'approved').in('kind', EXECUTABLE).lt('created_at', cutoff).limit(20);
     let handled = 0;
     for (const item of stuck ?? []) {
       if (item.payload?.executed || item.payload?.awaiting_site || item.risk_tier === 'red') continue;
