@@ -14,6 +14,7 @@ import { Spider, Wordmark } from './components/Marks';
 import Brief from './views/Brief';
 import Ledger from './views/Ledger';
 import Brain from './views/Brain';
+import People from './views/People';
 import Workshop from './views/Workshop';
 import Watchtower from './views/Watchtower';
 import Archive from './views/Archive';
@@ -23,6 +24,7 @@ const ROOMS: { id: Room; label: string }[] = [
   { id: 'brief', label: 'Brief' },
   { id: 'ledger', label: 'Ledger' },
   { id: 'brain', label: 'Brain' },
+  { id: 'people', label: 'People' },
   { id: 'workshop', label: 'Workshop' },
   { id: 'watchtower', label: 'Watch' },
   { id: 'archive', label: 'Archive' },
@@ -49,6 +51,7 @@ function RoomView({ room }: { room: Room }) {
     case 'brief': return <Brief />;
     case 'ledger': return <Ledger />;
     case 'brain': return <Brain />;
+    case 'people': return <People />;
     case 'workshop': return <Workshop />;
     case 'watchtower': return <Watchtower />;
     case 'archive': return <Archive />;

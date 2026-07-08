@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { supabase } from './lib/supabase';
 import { streamSilkChat, callFn, type LedgerRef } from './lib/api';
 
-export type Room = 'brief' | 'ledger' | 'brain' | 'workshop' | 'watchtower' | 'archive' | 'rules';
+export type Room = 'brief' | 'ledger' | 'brain' | 'people' | 'workshop' | 'watchtower' | 'archive' | 'rules';
 export interface Msg { role: 'user' | 'assistant'; content: string; refs?: LedgerRef[] }
 export interface ChatRow { id: string; title: string | null; created_at: string }
 

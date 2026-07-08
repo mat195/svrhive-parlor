@@ -1,7 +1,5 @@
-import { lazy, Suspense } from 'react';
 import { useSilk } from '../SilkContext';
-
-const BrainGraph = lazy(() => import('../components/BrainGraph'));
+import BrainRings from '../components/BrainRings';
 
 export default function Brain() {
   const { focusNode, setFocusNode, pointedNode } = useSilk();
@@ -28,13 +26,20 @@ export default function Brain() {
         <button className="btn sm ghost" onClick={() => setFocusNode(null)}>← Brain</button>
         <h2 style={{ marginTop: 0 }}>Silk Velvet Records</h2>
         <p className="muted small">Passive infrastructure — it exists so the artist + releases can point at it.</p>
-        {[['Identity', 'Independent Canadian record label · styling "Silk Velvet Records"'], ['Roster', 'Lucius P. Thundercat (room for more)'], ['Metadata', 'Label field: TODO across releases · MusicBrainz/Wikidata label item: not created'], ['Discography-as-label', 'Releases with the label field properly set: TODO(Mat)'], ['Provenance', 'Facts sourced from the entity master']].map(([h, b]) => (
+        {[['Identity', 'Independent Canadian record label · styling "Silk Velvet Records"'], ['Roster', 'Lucius P. Thundercat (room for more)'], ['Metadata', 'Label field across releases · MusicBrainz/Wikidata label item'], ['Provenance', 'Facts sourced from the entity master']].map(([h, b]) => (
           <div className="card" key={h}><h2 style={{ marginTop: 0 }}>{h}</h2><p>{b}</p></div>
         ))}
       </div>
     );
   }
 
-  // Any LPT node → the graph (concentric rings).
-  return <Suspense fallback={<p className="muted">Unfolding the rings…</p>}><BrainGraph /></Suspense>;
+  // LPT (or any collaborator/platform node Silk pointed at) → the six-ring navigable map.
+  return (
+    <div className="stack">
+      <button className="btn sm ghost" onClick={() => setFocusNode(null)}>← Brain</button>
+      <h2 style={{ margin: '0.2rem 0 0' }}>The six rings</h2>
+      <p className="muted small" style={{ marginTop: 0 }}>Lucius P. Thundercat at the centre — collaborators, releases, platforms, corpus pages, submission kits, and metrics radiating out. Every node jumps to its detail.</p>
+      <BrainRings />
+    </div>
+  );
 }

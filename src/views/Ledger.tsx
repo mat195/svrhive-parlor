@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../components/Toast';
 import { useSilk } from '../SilkContext';
+import CatalogManager from './CatalogManager';
 
-type Tab = 'results' | 'tracks' | 'runs' | 'journal' | 'mentions' | 'metrics' | 'assemblies';
+type Tab = 'catalog' | 'results' | 'tracks' | 'runs' | 'journal' | 'mentions' | 'metrics' | 'assemblies';
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'catalog', label: 'Catalog' },
   { id: 'results', label: 'Results' },
   { id: 'tracks', label: 'Top Tracks' },
   { id: 'runs', label: 'Runs' },
@@ -48,6 +50,7 @@ export default function Ledger() {
 
   useEffect(() => {
     (async () => {
+      if (tab === 'catalog') { setRows([]); setLoading(false); return; } // CatalogManager self-loads
       setLoading(true);
       let q: any;
       if (tab === 'results') {
@@ -97,15 +100,18 @@ export default function Ledger() {
         </div>
       )}
 
-      {loading && rows.length === 0 ? <p className="muted">Loading…</p> : (
-        <ul className="rows">
-          {rows.map((r) => <li key={r.id} className="row">{renderRow(tab, r, targetQuery)}</li>)}
-          {rows.length === 0 && <p className="muted">No rows.</p>}
-        </ul>
-      )}
-
-      {rows.length >= limit && (
-        <button className="btn ghost" onClick={() => setLimit((l) => l + PAGE)}>Load more</button>
+      {tab === 'catalog' ? <CatalogManager /> : (
+        <>
+          {loading && rows.length === 0 ? <p className="muted">Loading…</p> : (
+            <ul className="rows">
+              {rows.map((r) => <li key={r.id} className="row">{renderRow(tab, r, targetQuery)}</li>)}
+              {rows.length === 0 && <p className="muted">No rows.</p>}
+            </ul>
+          )}
+          {rows.length >= limit && (
+            <button className="btn ghost" onClick={() => setLimit((l) => l + PAGE)}>Load more</button>
+          )}
+        </>
       )}
     </div>
   );
