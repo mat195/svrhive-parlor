@@ -29,12 +29,14 @@ export async function fileQueueItem(o: FileOpts): Promise<{ filed: boolean; id?:
     }
   }
 
-  // 2) rolling 24h per-kind cap
+  // 2) rolling 24h per-kind cap — counts only LIVE proposed items (the actual flood risk).
+  //    Already-handled (done) or dismissed (rejected) items must not block a new, distinct
+  //    real finding of the same kind.
   if (o.maxPerDay && o.maxPerDay > 0) {
     const since = new Date(Date.now() - 864e5).toISOString();
     const { count } = await admin.from('action_queue')
-      .select('id', { count: 'exact', head: true }).eq('kind', o.kind).gte('created_at', since);
-    if ((count ?? 0) >= o.maxPerDay) return { filed: false, reason: `capped: ${o.kind} filed ${count}x in last 24h (max ${o.maxPerDay})` };
+      .select('id', { count: 'exact', head: true }).eq('kind', o.kind).eq('status', 'proposed').gte('created_at', since);
+    if ((count ?? 0) >= o.maxPerDay) return { filed: false, reason: `capped: ${o.kind} has ${count} proposed in last 24h (max ${o.maxPerDay})` };
   }
 
   // 3) insert
