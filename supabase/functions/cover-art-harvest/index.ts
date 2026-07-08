@@ -23,31 +23,31 @@ Deno.serve(async (req) => {
   const tok = await token();
   if (!tok) return json({ error: 'spotify auth failed' }, 502);
 
+  // Resolve covers by ISRC track-search (returns the album image inline). More reliable
+  // than the stored spotify_album_id — some of those 403 (stale/region-locked). Resumable
+  // via cover_art (skip releases already fetched). Tier-1 releases missing a cover.
   const { data: rels } = await admin.from('releases')
-    .select('id, title, release_date, catalog_number, spotify_album_id')
-    .not('spotify_album_id', 'is', null);
-  const list = rels ?? [];
-  const byAlbum = new Map(list.map((r) => [r.spotify_album_id as string, r]));
+    .select('id, title, release_date, catalog_number, tier, tracks(isrc), cover_art(source_url)')
+    .eq('tier', 1);
+  const list = (rels ?? []) as any[];
+  const missing = list.filter((r) => !(r.cover_art?.[0]?.source_url) && r.tracks?.[0]?.isrc);
 
-  // Per-album fetch (the batch /v1/albums?ids= endpoint 403s under client-credentials;
-  // the single-album endpoint works — same as the label sweep). Resumable via cover_art:
-  // skip releases already fetched. ~PER_RUN albums/invocation, throttled.
   const PER_RUN = 40;
   const out: any[] = [];
   let fetched = 0, rateLimited = false;
-  for (const [albumId, rel] of byAlbum) {
+  for (const rel of missing) {
     if (fetched >= PER_RUN) break;
-    const { data: existing } = await admin.from('cover_art').select('id, source_url').eq('release_id', rel.id).maybeSingle();
-    if (existing?.source_url) { continue; } // already have it — don't spend the fetch budget
     fetched++;
-    const r = await fetch(`https://api.spotify.com/v1/albums/${albumId}?market=US`, { headers: { Authorization: `Bearer ${tok}` } });
+    const isrc = rel.tracks[0].isrc;
+    const r = await fetch(`https://api.spotify.com/v1/search?q=isrc:${encodeURIComponent(isrc)}&type=track&market=US&limit=1`, { headers: { Authorization: `Bearer ${tok}` } });
     if (r.status === 429) { rateLimited = true; break; }
     if (!r.ok) { await new Promise((s) => setTimeout(s, 150)); continue; }
-    const a = await r.json();
-    const url = (a.images ?? [])[0]?.url ?? null;
+    const track = (await r.json())?.tracks?.items?.[0];
+    const url = (track?.album?.images ?? [])[0]?.url ?? null;
     if (url) {
       await admin.from('cover_art').upsert({ release_id: rel.id, slug: '', source_url: url, fetched_at: new Date().toISOString() }, { onConflict: 'release_id' });
-      out.push({ id: rel.id, title: rel.title, release_date: rel.release_date, catalog_number: rel.catalog_number, image_url: url });
+      if (track?.album?.id) await admin.from('releases').update({ spotify_album_id: track.album.id }).eq('id', rel.id);
+      out.push({ id: rel.id, title: rel.title, catalog_number: rel.catalog_number, image_url: url });
     }
     await new Promise((s) => setTimeout(s, 150));
   }
