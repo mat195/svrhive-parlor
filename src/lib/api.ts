@@ -28,6 +28,7 @@ export async function streamSilkChat(opts: {
   chatId: string;
   message: string;
   deep?: boolean;
+  images?: { media_type: string; data: string }[];
   onRefs?: (refs: LedgerRef[], model: string) => void;
   onDelta?: (text: string) => void;
 }): Promise<{ text: string; refs: LedgerRef[] }> {
@@ -38,7 +39,7 @@ export async function streamSilkChat(opts: {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/silk-chat`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: opts.chatId, message: opts.message, deep: opts.deep ?? false }),
+    body: JSON.stringify({ chat_id: opts.chatId, message: opts.message, deep: opts.deep ?? false, images: opts.images ?? [] }),
   });
 
   if (res.status === 429) throw new Error('Rate limit — wait a minute.');

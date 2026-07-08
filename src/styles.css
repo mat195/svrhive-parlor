@@ -351,6 +351,14 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .modal .actions { display: flex; gap: 0.6rem; margin-top: 1rem; } .modal .actions .btn { flex: 1; padding: 0.9rem; }
 .copybtn { white-space: nowrap; }
 .composer { display: flex; gap: 0.5rem; }
+/* Image attach: stack an attachment strip above the input row */
+.composer { flex-direction: column; align-items: stretch; }
+.composer-row { display: flex; gap: 0.5rem; align-items: center; }
+.composer-row input:not([type=file]) { flex: 1; }
+.attach-strip { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
+.attach-chip { display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 0.2rem 0.45rem; font-size: 0.78rem; }
+.attach-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0; }
+.attach-x:hover { color: var(--err); }
 
 /* Listings */
 .sprint { text-align: left; } .sprint.ok { border-color: var(--verified); }

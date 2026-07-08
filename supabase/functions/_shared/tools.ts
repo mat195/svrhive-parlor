@@ -87,6 +87,11 @@ export const SILK_TOOLS = [
     description: 'Run a READ-ONLY SQL query (SELECT / WITH) against the app database and get rows back as JSON. This is your DEFAULT way to check what is actually in ANY table — current or future — instead of guessing or asking. You can SELECT from and JOIN any application table (e.g. action_queue, corpus_drafts, visibility_runs, visibility_results, metrics_snapshots, silk_task_checkpoints, entity_facts, silk_journal, parlor_messages, silk_config). If you do NOT know the exact table or column names, first discover them by querying information_schema.tables / information_schema.columns, then query the data — you never need to be told a table name in advance. Rules: one statement, SELECT/WITH only (no INSERT/UPDATE/DELETE — those go through queue_for_approval), results capped at 1000 rows so use WHERE/LIMIT/ORDER BY, and no access to credentials or secrets (auth.* / vault.* are blocked).',
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'A single read-only SQL statement (SELECT or WITH ...). Use fully-qualified names like public.silk_task_checkpoints when helpful.' } }, required: ['query'] },
   },
+  {
+    name: 'record_metric',
+    description: 'Log a metric reading to the metrics_snapshots time series — e.g. numbers you read off a Spotify for Artists screenshot (login-walled, no public API). Records a timestamped snapshot for trend tracking. platform: spotify/instagram/youtube/etc; metric: monthly_listeners/followers/streams/etc; value: the number.',
+    input_schema: { type: 'object', properties: { platform: { type: 'string' }, metric: { type: 'string' }, value: { type: 'number' } }, required: ['platform', 'metric', 'value'] },
+  },
 ];
 
 let _spotifyToken: { token: string; exp: number } | null = null;
@@ -250,6 +255,12 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
     if (name === 'ledger_query_web_fetches') return await ledger('web_fetch_cache', 'url, status, fetched_at', limit);
     if (name === 'citation_reconciliation') { const { data, error } = await admin.rpc('citation_reconciliation'); return error ? { error: error.message } : data; }
     if (name === 'query_database') { const { data, error } = await admin.rpc('query_database', { query: String(input.query ?? '') }); return error ? { error: error.message } : data; }
+    if (name === 'record_metric') {
+      const platform = String(input.platform ?? '').trim(), metric = String(input.metric ?? '').trim(), value = Number(input.value);
+      if (!platform || !metric || !Number.isFinite(value)) return { error: 'platform, metric, and a numeric value are required' };
+      const { data, error } = await admin.from('metrics_snapshots').insert({ platform, metric, value }).select('captured_at').single();
+      return error ? { error: error.message } : { ok: true, recorded: { platform, metric, value, captured_at: data.captured_at } };
+    }
     return { error: `unknown tool ${name}` };
   } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
 }

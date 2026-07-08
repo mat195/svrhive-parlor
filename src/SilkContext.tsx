@@ -34,7 +34,7 @@ interface SilkCtx {
   chatBooting: boolean;
   chats: ChatRow[];
   activeChatId: string | null;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, images?: { media_type: string; data: string }[]) => Promise<void>;
   newChat: () => Promise<void>;
   loadChat: (id: string) => Promise<void>;
 }
@@ -125,16 +125,17 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     return id;
   }, [activeChatId, refreshChats]);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, images?: { media_type: string; data: string }[]) => {
     const t = text.trim();
-    if (!t || chatBusy) return;
+    if ((!t && !(images && images.length)) || chatBusy) return;
     const id = await ensureChat();
-    await supabase.from('parlor_messages').insert({ chat_id: id, role: 'user', content: t });
-    setMessages((m) => [...m, { role: 'user', content: t }, { role: 'assistant', content: '', refs: [] }]);
+    const stored = t || (images && images.length ? `📎 ${images.length} image${images.length > 1 ? 's' : ''} attached` : '');
+    await supabase.from('parlor_messages').insert({ chat_id: id, role: 'user', content: stored });
+    setMessages((m) => [...m, { role: 'user', content: stored }, { role: 'assistant', content: '', refs: [] }]);
     setChatBusy(true);
     try {
       const { text: full } = await streamSilkChat({
-        chatId: id, message: t,
+        chatId: id, message: t, images,
         onRefs: (refs) => setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], refs }; return c; }),
         onDelta: (d) => setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + d }; return c; }),
       });

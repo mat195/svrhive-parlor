@@ -124,12 +124,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'rate_limited', retry_after_s: 60 }), { status: 429, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
-  let body: { chat_id?: string; message?: string; deep?: boolean };
+  let body: { chat_id?: string; message?: string; deep?: boolean; images?: { media_type: string; data: string }[] };
   try { body = await req.json(); } catch { return new Response('bad json', { status: 400, headers: CORS }); }
   const rawMessage = (body.message ?? '').trim();
-  if (!rawMessage) return new Response('empty message', { status: 400, headers: CORS });
+  const hasImages = Array.isArray(body.images) && body.images.length > 0;
+  if (!rawMessage && !hasImages) return new Response('empty message', { status: 400, headers: CORS });
 
-  const message = rawMessage.replace(/^\/deep\b\s*/i, '');
+  const message = (rawMessage || 'Read the numbers in this image and report them.').replace(/^\/deep\b\s*/i, '');
   const model = DEEP_MODEL; // P1-5: reasoning quality is the product — strongest default.
 
   const { ctx, refs } = await gatherContext(message);
@@ -225,7 +226,7 @@ Deno.serve(async (req) => {
   // Chat continuity: load the prior turns so Silk remembers the conversation (the
   // client already persisted the current user message before calling us). Without this
   // Silk answers every message in isolation.
-  let history: { role: string; content: string }[] = [];
+  let history: { role: string; content: any }[] = [];
   if (body.chat_id) {
     const { data: msgs } = await admin.from('parlor_messages')
       .select('role, content, created_at').eq('chat_id', body.chat_id).neq('role', 'system')
@@ -247,6 +248,26 @@ Deno.serve(async (req) => {
     else merged.push({ ...m });
   }
   history = merged;
+
+  // Image attachments (Claude is multimodal): attach to the FINAL user turn as image
+  // content blocks. The bridge for login-walled data with no API — e.g. a Spotify for
+  // Artists screenshot Silk reads the numbers off of. Not persisted to history (read once).
+  const images = Array.isArray((body as any).images)
+    ? (body as any).images
+        .filter((im: any) => im?.data && /^image\/(png|jpe?g|gif|webp)$/.test(im?.media_type ?? ''))
+        .slice(0, 4)
+    : [];
+  if (images.length) {
+    for (let k = history.length - 1; k >= 0; k--) {
+      if (history[k].role === 'user') {
+        history[k].content = [
+          { type: 'text', text: String(history[k].content ?? '') || 'Read the numbers in this image.' },
+          ...images.map((im: any) => ({ type: 'image', source: { type: 'base64', media_type: im.media_type === 'image/jpg' ? 'image/jpeg' : im.media_type, data: im.data } })),
+        ];
+        break;
+      }
+    }
+  }
 
   const stream = new ReadableStream({
     async start(controller) {

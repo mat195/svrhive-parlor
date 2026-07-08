@@ -6,9 +6,25 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [listening, setListening] = useState(false);
+  const [images, setImages] = useState<{ media_type: string; data: string; name: string }[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const recogRef = useRef<any>(null);
+
+  // Paperclip → file picker → base64. The bridge for login-walled data with no API
+  // (e.g. Spotify for Artists screenshots): Silk reads the numbers straight off the image.
+  async function onFiles(files: FileList | null) {
+    if (!files) return;
+    const picked = await Promise.all(Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, 4).map((f) =>
+      new Promise<{ media_type: string; data: string; name: string }>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve({ media_type: f.type, data: String(r.result).split(',')[1] ?? '', name: f.name });
+        r.readAsDataURL(f);
+      })));
+    setImages((prev) => [...prev, ...picked].slice(0, 4));
+    if (fileRef.current) fileRef.current.value = '';
+  }
 
   // Web Speech API dictation (mic → text field). Gracefully absent if unsupported.
   const SpeechRec = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
@@ -34,9 +50,10 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || chatBusy) return;
-    setInput(''); setTyping(false);
-    await sendMessage(text);
+    if ((!text && images.length === 0) || chatBusy) return;
+    const imgs = images.map(({ media_type, data }) => ({ media_type, data }));
+    setInput(''); setImages([]); setTyping(false);
+    await sendMessage(text, imgs);
   }
 
   const header = (
@@ -79,16 +96,30 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
 
   const composer = (
     <form className="composer" onSubmit={submit}>
-      <input ref={inputRef} value={input}
-        onChange={(e) => { setInput(e.target.value); setTyping(e.target.value.length > 0); }}
-        onBlur={() => setTyping(false)}
-        placeholder={silkPlaceholder(room, focusNode)} aria-label="Ask Silk" />
-      {SpeechRec && (
-        <button type="button" className={`mic-btn ${listening ? 'live' : ''}`} onClick={toggleMic} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Voice input">
-          {listening ? '●' : '🎙'}
-        </button>
+      {images.length > 0 && (
+        <div className="attach-strip">
+          {images.map((im, i) => (
+            <span key={i} className="attach-chip" title={im.name}>
+              🖼 {im.name.length > 16 ? im.name.slice(0, 15) + '…' : im.name}
+              <button type="button" className="attach-x" onClick={() => setImages((p) => p.filter((_, k) => k !== i))} aria-label="Remove image">×</button>
+            </span>
+          ))}
+        </div>
       )}
-      <button className="btn sm" type="submit" disabled={chatBusy || !input.trim()}>Send</button>
+      <div className="composer-row">
+        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+        <button type="button" className="mic-btn" onClick={() => fileRef.current?.click()} aria-label="Attach image" title="Attach image (e.g. a Spotify for Artists screenshot)">📎</button>
+        <input ref={inputRef} value={input}
+          onChange={(e) => { setInput(e.target.value); setTyping(e.target.value.length > 0); }}
+          onBlur={() => setTyping(false)}
+          placeholder={images.length ? 'Add a note, or just send the image…' : silkPlaceholder(room, focusNode)} aria-label="Ask Silk" />
+        {SpeechRec && (
+          <button type="button" className={`mic-btn ${listening ? 'live' : ''}`} onClick={toggleMic} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Voice input">
+            {listening ? '●' : '🎙'}
+          </button>
+        )}
+        <button className="btn sm" type="submit" disabled={chatBusy || (!input.trim() && images.length === 0)}>Send</button>
+      </div>
     </form>
   );
 
