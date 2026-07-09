@@ -7,6 +7,22 @@ captured in git (migrations, function deploys, DB ops, cache syncs).
 
 ## 2026-07-08 → 07-09
 
+### 🎧 Native audio player (drop the Spotify iframe)
+The public listening experience was an embedded Spotify iframe (amateur, off-brand). Replaced
+with a native player in our own design language.
+- `site 6a11999` Harvest Apple/iTunes 30s preview URLs into cover data (60/67 + 5/6). Spotify
+  Web API `preview_url` was deprecated late 2024 (returned 0/72); iTunes serves public no-auth
+  m4a previews. Verified live: `HTTP 200`, `audio/x-m4a`, ~1MB clips.
+- `site 2d28a83` Shared `<audio>` + floating transport bar (Velvet/Underfelt surface, Silk-gold
+  progress, mono timestamps, Instrument Serif title, `transition:persist`). Click any
+  `[data-preview]` cover site-wide → instant play + gold playing-ring; one-at-a-time swap.
+- `site 2d28a83` Listening Room needle-drop mounts a native deck transport (was the Spotify
+  iframe); drives the same shared `<audio>`.
+- `site 2d28a83` Null-preview covers (7/67 + 1/6) → in-theme "Preview unavailable — Listen on
+  Spotify →" state, never an iframe.
+- `site 2d28a83` Removed the Spotify IFrame API script + all EmbedController/compact-embed code.
+  Verified gone from live: `iframe-api`, `open.spotify.com/embed` — 0 references.
+
 ### 🕷 Proactive Silk: daily briefing + push notifications
 Silk now contributes while Mat isn't watching — pushes updates to the floating widget, not just
 answers when poked.
