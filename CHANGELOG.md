@@ -23,6 +23,22 @@ with a native player in our own design language.
 - `site 2d28a83` Removed the Spotify IFrame API script + all EmbedController/compact-embed code.
   Verified gone from live: `iframe-api`, `open.spotify.com/embed` — 0 references.
 
+### 🧵 Chat Stage B: threaded conversations + auto-archive
+Chat threads are now first-class and self-tidying (the third Stage-B leg, proactive updates,
+shipped in the 0034 pass).
+- `parlor ee1a8c4` `parlor_chats`: `archived_at` + `last_message_at`; a touch-trigger keeps
+  activity fresh and revives a thread the moment it's spoken in again.
+- `parlor ee1a8c4` Threads auto-named from their opening message (were all "Silk chat");
+  backfilled existing threads' titles from their first message.
+- `parlor ee1a8c4` Thread list is now primary: a switcher in the chat bar opens a slide-over of
+  active threads (title + relative activity) with a collapsed Archived section + per-thread archive.
+- `parlor ee1a8c4` Auto-archive idle >24h: in-DB `archive_idle_chats()` + hourly `chat_autoarchive`
+  cron; writes a journal breadcrumb with opening context (outcomes already distilled to
+  `chat_extractions` during the thread's life). Verified: archived 3 idle threads on first run.
+- Cron hygiene confirmed with run-history proof: `executor_sweeper` (untracked, hardcoded anon
+  key) fully removed; `silk_executor_sweep` (`*/10`, Vault) is the sole executor sweep — 3 runs
+  in 30 min at 00/10/20, zero duplicate `*/2` executions.
+
 ### 🕷 Proactive Silk: daily briefing + push notifications
 Silk now contributes while Mat isn't watching — pushes updates to the floating widget, not just
 answers when poked.
