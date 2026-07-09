@@ -350,6 +350,14 @@ Deno.serve(async (req) => {
         // Never ship an empty reply (heavy agent loops can exhaust their turn budget).
         if (!full.trim()) full = "I ran long on that one and didn't finish cleanly — ask me for one specific piece and I'll nail it.";
 
+        // Deterministic publish confirmation (not prompt-dependent): a successful publish_draft
+        // MUST surface its real live URL in the reply, however terse the model was. Append if missing.
+        const pubT = toolTrace.find((t) => t.name === 'publish_draft' && (t.result as any)?.ok && (t.result as any)?.live_url);
+        if (pubT) {
+          const purl = (pubT.result as any).live_url as string;
+          if (purl && !full.includes(purl)) full = full.replace(/\s*$/, '') + `\n\n**Published — live at ${purl}** — CI builds it live in ~1–2 min.`;
+        }
+
         let filedThisTurn = false;
         if (toolTrace.length) {
           sse(controller, 'tools', { used: toolTrace.map((t) => t.name) });
