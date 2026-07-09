@@ -5,6 +5,7 @@ import { streamSilkChat, callFn, type LedgerRef } from './lib/api';
 export type Room = 'brief' | 'ledger' | 'brain' | 'people' | 'workshop' | 'watchtower' | 'archive' | 'rules';
 export interface Msg { role: 'user' | 'assistant'; content: string; refs?: LedgerRef[] }
 export interface ChatRow { id: string; title: string | null; created_at: string }
+export interface Notif { id: string; kind: string; title: string; body: string | null; url: string | null; priority: 'normal' | 'high'; read_at: string | null; created_at: string }
 
 const ACTIVE_KEY = 'silk_active_chat';
 
@@ -33,6 +34,12 @@ interface SilkCtx {
   draftsRev: number; // bumps when a chat revision may have changed a draft → Foundry reloads
   chatOpen: boolean;                    // floating widget open/closed
   setChatOpen: (v: boolean) => void;
+  // Proactive updates Silk pushes (briefing, battery, gate-blocked, stalls). Surfaced as a
+  // widget badge + list — this is Silk contributing while Mat isn't watching.
+  notifs: Notif[];
+  unreadCount: number;
+  markNotifRead: (id: string) => Promise<void>;
+  markAllNotifsRead: () => Promise<void>;
   typing: boolean;
   setTyping: (v: boolean) => void;
   chatBusy: boolean;
@@ -58,6 +65,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const [pinnedDraft, setPinnedDraft] = useState<{ id: string; target_query: string } | null>(null);
   const [draftsRev, setDraftsRev] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
+  const [notifs, setNotifs] = useState<Notif[]>([]);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chats, setChats] = useState<ChatRow[]>([]);
@@ -101,6 +109,30 @@ export function SilkProvider({ children }: { children: ReactNode }) {
       setChatBooting(false);
     })();
   }, [loadMessages, refreshChats]);
+
+  // Proactive updates: load recent notifications + live-subscribe to new pushes. Silk pings
+  // here from cron jobs and background events (briefing, battery-complete, gate-blocked, stalls).
+  const refreshNotifs = useCallback(async () => {
+    const { data } = await supabase.from('silk_notifications').select('*').order('created_at', { ascending: false }).limit(30);
+    setNotifs((data as Notif[]) ?? []);
+  }, []);
+  useEffect(() => {
+    refreshNotifs();
+    const ch = supabase.channel('silk_notifs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'silk_notifications' },
+        (payload) => setNotifs((cur) => [payload.new as Notif, ...cur].slice(0, 30)))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [refreshNotifs]);
+  const markNotifRead = useCallback(async (id: string) => {
+    setNotifs((cur) => cur.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)));
+    await supabase.from('silk_notifications').update({ read_at: new Date().toISOString() }).eq('id', id);
+  }, []);
+  const markAllNotifsRead = useCallback(async () => {
+    const now = new Date().toISOString();
+    setNotifs((cur) => cur.map((n) => (n.read_at ? n : { ...n, read_at: now })));
+    await supabase.from('silk_notifications').update({ read_at: now }).is('read_at', null);
+  }, []);
 
   // Ambient distiller trigger (Brief Six): after a chat settles (60s idle) or Mat
   // navigates away / closes, distill the conversation into proposed extractions.
@@ -184,6 +216,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       room, setRoom, focusNode, setFocusNode, pointedNode, pointAt, prefill, askSilk, consumePrefill,
       pinnedDraft, discussDraft, clearPinnedDraft, draftsRev, chatOpen, setChatOpen,
+      notifs, unreadCount: notifs.filter((n) => !n.read_at).length, markNotifRead, markAllNotifsRead,
       typing, setTyping, chatBusy,
       messages, chatBooting, chats, activeChatId, sendMessage, newChat, loadChat,
     }}>

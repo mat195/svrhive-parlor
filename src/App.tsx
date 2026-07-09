@@ -7,6 +7,7 @@ import SilkPanel from './components/SilkPanel';
 import QuestionsStrip from './components/QuestionsStrip';
 import ExtractionsCard from './components/ExtractionsCard';
 import PresenceBar from './components/PresenceBar';
+import Notifications from './components/Notifications';
 import DoctrineHash from './components/DoctrineHash';
 import { ToastProvider } from './components/Toast';
 import CommandPalette from './components/CommandPalette';
@@ -60,7 +61,7 @@ function RoomView({ room }: { room: Room }) {
 }
 
 function HQ() {
-  const { room, setRoom, setFocusNode, chatOpen, setChatOpen } = useSilk();
+  const { room, setRoom, setFocusNode, chatOpen, setChatOpen, unreadCount } = useSilk();
   const [running, setRunning] = useState(false);
 
   // Deep-link on mount.
@@ -104,6 +105,7 @@ function HQ() {
       <button className={`silk-fab ${chatOpen ? 'open' : ''}`} onClick={() => setChatOpen(!chatOpen)} aria-label={chatOpen ? 'Close Silk' : 'Open Silk'} aria-expanded={chatOpen}>
         {chatOpen ? <span className="fab-x">×</span> : <Spider size={22} className="spider" />}
         {running && !chatOpen && <span className="fab-dot" title="battery running" />}
+        {unreadCount > 0 && !chatOpen && <span className="fab-badge" title={`${unreadCount} update${unreadCount > 1 ? 's' : ''} from Silk`}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
       </button>
       {chatOpen && (
         <aside className="silkdock silk-float">
@@ -111,7 +113,7 @@ function HQ() {
             <Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}<DoctrineHash />
             <button className="float-close" onClick={() => setChatOpen(false)} aria-label="Close">×</button>
           </header>
-          <div className="float-strips"><PresenceBar /><QuestionsStrip /><ExtractionsCard /></div>
+          <div className="float-strips"><Notifications /><PresenceBar /><QuestionsStrip /><ExtractionsCard /></div>
           <SilkPanel variant="dock" />
         </aside>
       )}

@@ -594,6 +594,18 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .silk-float .float-strips { flex: 0 0 auto; }
 @media (max-width: 560px) { .silk-float { right: 0.6rem; left: 0.6rem; width: auto; bottom: 5rem; height: 72vh; } }
 
+/* Proactive updates Silk pushed (briefing / battery / gate / stall) — top of the widget. */
+.silk-notifs { border: 1px solid var(--bg-3); border-radius: 10px; background: var(--bg-1); margin-bottom: 0.5rem; overflow: hidden; }
+.silk-notifs-head { display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.6rem; font-size: 0.72rem; color: var(--muted); background: var(--bg-2); border-bottom: 1px solid var(--bg-3); }
+.silk-notif { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.5rem 0.55rem; border-bottom: 1px solid var(--bg-2); cursor: pointer; }
+.silk-notif:last-child { border-bottom: 0; }
+.silk-notif:hover { background: var(--bg-2); }
+.silk-notif.hi { border-left: 3px solid var(--ribbon, #7a3b4f); }
+.silk-notif-ic { flex: 0 0 auto; width: 1.1rem; text-align: center; color: var(--gold); }
+.silk-notif-txt { flex: 1 1 auto; min-width: 0; }
+.silk-notif-title { font-size: 0.82rem; color: var(--ink); font-weight: 600; }
+.silk-notif-body { font-size: 0.76rem; color: var(--muted); margin-top: 0.15rem; line-height: 1.35; }
+
 /* "Silk is thinking…" indicator (immediate-send state) */
 .silk-thinking { color: #241019; opacity: 0.75; font-style: italic; }
 .silk-thinking i { display: inline-block; animation: thinkdot 1.2s infinite; font-style: normal; }

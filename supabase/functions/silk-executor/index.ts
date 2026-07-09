@@ -11,6 +11,7 @@
 // Gated: pre-defined kinds only; red tier is never auto-executed (publish still needs Mat).
 import { admin, json, CORS } from '../_shared/auth.ts';
 import { verifyWrite } from '../_shared/silk.ts';
+import { notify } from '../_shared/notify.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -35,6 +36,10 @@ async function mintOwnerToken(): Promise<string | null> {
 
 async function markDone(id: string, payload: Record<string, unknown>, result: string) {
   await admin.from('action_queue').update({ status: 'done', payload: { ...payload, executed: true, awaiting_site: false, execution_result: result, executed_at: new Date().toISOString() } }).eq('id', id);
+  // A resolved stall: an item that was held awaiting the live site is now verified public. Push it.
+  if (payload?.awaiting_site) {
+    await notify({ kind: 'job-done', title: `Now live: ${String(payload.title ?? payload.target_query ?? 'a correction')}`.slice(0, 80), body: `A change that was waiting on the live site is now verified public. ${result}`, url: (payload.live_url as string) ?? undefined });
+  }
 }
 async function markError(id: string, payload: Record<string, unknown>, err: string) {
   await admin.from('action_queue').update({ payload: { ...payload, execution_error: err, error_at: new Date().toISOString() } }).eq('id', id); // stays 'approved' → sweeper/Mat see the error
@@ -149,6 +154,8 @@ Deno.serve(async (req) => {
         // Give up: mark terminal so future sweeps skip it, and alert ONCE (not every run).
         await admin.from('action_queue').update({ payload: { ...item.payload, execution_attempts: attempts, execution_giveup: true } }).eq('id', item.id);
         await admin.from('silk_journal').insert({ entry: `[executor-sweeper] Queue item ${item.id} ("${item.payload?.title}") could not execute after ${attempts - 1} attempts (${item.payload?.execution_error ?? 'unknown error'}) — giving up; needs Mat. ⚠`, tags: ['executor', 'stuck', 'alert'] });
+        // Needs Mat — the giveup flag guarantees this fires once per item, so no dedupe churn.
+        await notify({ kind: 'stall', title: `Stuck — needs you: ${String(item.payload?.title ?? item.kind)}`.slice(0, 80), body: `Couldn't execute after ${attempts - 1} attempts (${item.payload?.execution_error ?? 'unknown error'}). It's parked until you take a look.`, url: '#/workshop', priority: 'high', dedupeMins: 0 });
         gaveUp++; continue;
       }
       await admin.from('action_queue').update({ payload: { ...item.payload, execution_attempts: attempts } }).eq('id', item.id);

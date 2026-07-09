@@ -3,6 +3,7 @@
 // the scoped door. No token configured → clean stub (nothing committed).
 import { admin, requireOwner, json, CORS } from '../_shared/auth.ts';
 import { provenanceIssues } from '../_shared/provenance.ts';
+import { notify } from '../_shared/notify.ts';
 
 const REPO = 'mat195/svrhive-site';
 const ALLOW_ENTRY = 'github:svrhive-site:commit-on-approval';
@@ -35,6 +36,8 @@ Deno.serve(async (req) => {
       entry: `[gate] Publish BLOCKED for ${draft.filename} (${draft.id}) — provenance: ${issues.join('; ')}. Nothing committed.`,
       tags: ['gate', 'provenance', 'publish-blocked'],
     });
+    // Push it — a publish can be triggered from chat/automation where Mat isn't watching the response.
+    await notify({ kind: 'gate-blocked', title: `Publish blocked: ${draft.target_query ?? draft.filename}`.slice(0, 80), body: `The provenance gate stopped it: ${issues.join('; ')}. Nothing was committed — fix the draft (Quick Edit / Revise) and try again.`, url: '#/workshop', priority: 'high' });
     return json({ ok: false, blocked: true, error: `Publish blocked by provenance gate: ${issues.join('; ')}. Fix the draft (Quick Edit / Revise) and try again.`, issues }, 422);
   }
 
