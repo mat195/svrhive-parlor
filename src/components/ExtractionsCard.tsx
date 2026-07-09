@@ -19,8 +19,13 @@ interface Extraction {
 const TYPE_LABEL: Record<string, string> = {
   fact: 'fact', preference: 'preference', correction: 'correction', instinct: 'instinct', question: 'question',
 };
+// Map a note's confidence onto the Brain's confidence-state colour language so these cards read
+// the same as the rest of Brain (moss = verified, gold = unverified/needs-review, dust = quarantined).
+const confClass = (c: string) =>
+  c === 'verified' ? 'verified' : c === 'quarantined' ? 'quarantined' : c === 'superseded' ? 'superseded' : 'unverified';
 
-export default function ExtractionsCard() {
+export default function ExtractionsCard({ variant = 'dock' }: { variant?: 'dock' | 'brain' }) {
+  const isBrain = variant === 'brain';
   const [rows, setRows] = useState<Extraction[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,6 +51,7 @@ export default function ExtractionsCard() {
 
   if (rows.length === 0) return null;
   const selectedIds = rows.filter((r) => sel[r.id]).map((r) => r.id);
+  const open = isBrain || expanded; // in Brain the review is always open (a pinned section)
 
   async function decide(action: 'approve' | 'reject', ids: string[]) {
     if (busy || ids.length === 0) return;
@@ -58,23 +64,32 @@ export default function ExtractionsCard() {
   }
 
   return (
-    <div className="qstrip xstrip">
-      <button className="qstrip-bar" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
-        <span className="xstrip-dot" />
-        <span className="qstrip-label">{rows.length} new {rows.length > 1 ? 'notes' : 'note'} from our conversation <span className="muted">· review</span></span>
-        <span className="qstrip-chev">{expanded ? '▲' : '▼'}</span>
-      </button>
+    <div className={`qstrip xstrip ${isBrain ? 'qstrip-brain' : ''}`}>
+      {isBrain ? (
+        <div className="brainq-head">
+          <span className="brainq-dot c-unverified" title="Proposed memory — nothing changes canon until you approve" />
+          <span className="brainq-title">New notes from our conversation</span>
+          <span className="muted small">{rows.length} pending</span>
+        </div>
+      ) : (
+        <button className="qstrip-bar" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
+          <span className="xstrip-dot" />
+          <span className="qstrip-label">{rows.length} new {rows.length > 1 ? 'notes' : 'note'} from our conversation <span className="muted">· review</span></span>
+          <span className="qstrip-chev">{expanded ? '▲' : '▼'}</span>
+        </button>
+      )}
 
-      {expanded && (
+      {open && (
         <div className="qstrip-card">
           <ul className="xstrip-list">
             {rows.map((r) => {
               const canon = edits[r.id] ?? r.proposed_content?.canonical ?? r.proposed_content?.summary ?? '';
               return (
-                <li key={r.id} className={sel[r.id] ? '' : 'deselected'}>
+                <li key={r.id} className={`${sel[r.id] ? '' : 'deselected'} ${isBrain ? 'conf-' + confClass(r.confidence) : ''}`}>
                   <label className="xstrip-head">
                     <input type="checkbox" checked={!!sel[r.id]} onChange={(e) => setSel((s) => ({ ...s, [r.id]: e.target.checked }))} />
                     <span className={`xstrip-badge x-${r.extraction_type}`}>{TYPE_LABEL[r.extraction_type] ?? r.extraction_type}</span>
+                    {isBrain && <span className={`conf-dot c-${confClass(r.confidence)}`} title={r.confidence} />}
                     <span className="muted small">{r.target_field || ''} · {r.confidence}</span>
                   </label>
                   <div className="xstrip-summary">{r.proposed_content?.summary}</div>

@@ -20,6 +20,7 @@
   --verified: #8a9b6a;    /* moss */
   --unverified: #c9a961;  /* gold */
   --quarantined: #6b6058; /* dust */
+  --superseded: #7a5d6b;  /* faded mauve — replaced/retired */
   --err: #c98a8a;
 
   --serif: 'Fraunces Variable', 'PP Editorial New', Georgia, serif;
@@ -637,3 +638,27 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .silk-thinking i { display: inline-block; animation: thinkdot 1.2s infinite; font-style: normal; }
 .silk-thinking i:nth-child(2) { animation-delay: 0.2s; } .silk-thinking i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes thinkdot { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }
+
+/* ── Silk's Questions pin — the review queue moved into the Brain room ─────────── */
+.c-superseded { background: var(--superseded); }
+.brain-queue { display: flex; flex-direction: column; gap: 0.9rem; margin-bottom: 1.3rem; }
+/* Brain variant of the question/notes strips: full sections (not the narrow dock bars). */
+.qstrip-brain { background: var(--bg-1); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem 0.9rem; }
+.qstrip-brain .qstrip-card { margin-top: 0.5rem; }
+.brainq-head { display: flex; align-items: center; gap: 0.5rem; }
+.brainq-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.brainq-title { font-weight: 600; color: var(--ink); font-size: 0.9rem; }
+.brainq-empty { padding: 0.3rem 0 0.1rem; }
+/* Per-note confidence accent — same colour language as the rest of Brain. */
+.conf-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.xstrip-list li.conf-verified { border-left: 3px solid var(--verified); padding-left: 0.55rem; }
+.xstrip-list li.conf-unverified { border-left: 3px solid var(--unverified); padding-left: 0.55rem; }
+.xstrip-list li.conf-quarantined { border-left: 3px solid var(--quarantined); padding-left: 0.55rem; }
+.xstrip-list li.conf-superseded { border-left: 3px solid var(--superseded); padding-left: 0.55rem; opacity: 0.72; }
+
+/* The lightweight bubble badge that replaced the inline cards. */
+.brainq-badge { display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid rgba(201,169,97,0.32); border-radius: 8px; padding: 0.5rem 0.7rem; color: var(--ink); cursor: pointer; font-size: 0.82rem; transition: border-color 0.2s, background 0.2s; }
+.brainq-badge:hover { border-color: var(--gold); background: var(--bg-3); }
+.brainq-badge-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.brainq-badge strong { color: var(--gold); font-weight: 600; }
+.brainq-badge-arrow { margin-left: auto; color: var(--muted); }

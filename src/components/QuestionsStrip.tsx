@@ -49,7 +49,8 @@ function ContextPreview({ ctx }: { ctx: any }) {
   return null;
 }
 
-export default function QuestionsStrip() {
+export default function QuestionsStrip({ variant = 'dock' }: { variant?: 'dock' | 'brain' }) {
+  const isBrain = variant === 'brain';
   const [queue, setQueue] = useState<Q[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -92,6 +93,7 @@ export default function QuestionsStrip() {
 
   const current = queue.find((q) => q.id === selectedId) ?? queue[0] ?? null;
   const count = queue.length;
+  const open = isBrain || expanded; // in Brain the section is always open (a pinned queue)
 
   // When the top card changes, restore its draft + point Silk at its brain node.
   useEffect(() => {
@@ -130,16 +132,25 @@ export default function QuestionsStrip() {
   const dot = <span className={`qstrip-dot ${count ? '' : 'empty'}`} />;
 
   return (
-    <div className="qstrip">
-      <button className="qstrip-bar" onClick={() => count && setExpanded((e) => !e)} aria-expanded={expanded} disabled={!count}>
-        {dot}
-        <span className="qstrip-label">
-          {count ? <>{count} question{count > 1 ? 's' : ''} from Silk <span className="muted">· tap to answer</span></> : <span className="muted">no open questions</span>}
-        </span>
-        {count > 0 && <span className="qstrip-chev">{expanded ? '▲' : '▼'}</span>}
-      </button>
+    <div className={`qstrip ${isBrain ? 'qstrip-brain' : ''}`}>
+      {isBrain ? (
+        <div className="brainq-head">
+          <span className="brainq-dot c-unverified" title="Awaiting your answer" />
+          <span className="brainq-title">Silk's Questions</span>
+          <span className="muted small">{count ? `${count} pending` : 'none open'}</span>
+        </div>
+      ) : (
+        <button className="qstrip-bar" onClick={() => count && setExpanded((e) => !e)} aria-expanded={expanded} disabled={!count}>
+          {dot}
+          <span className="qstrip-label">
+            {count ? <>{count} question{count > 1 ? 's' : ''} from Silk <span className="muted">· tap to answer</span></> : <span className="muted">no open questions</span>}
+          </span>
+          {count > 0 && <span className="qstrip-chev">{expanded ? '▲' : '▼'}</span>}
+        </button>
+      )}
+      {isBrain && count === 0 && <div className="muted small brainq-empty">No open questions — you're all caught up.</div>}
 
-      {expanded && count > 0 && !showAll && current && (
+      {open && count > 0 && !showAll && current && (
         <div className={`qstrip-card ${leaving ? 'leaving' : ''}`}>
           <div className="qhead">
             <span className="q-text">{current.question}</span>
@@ -183,7 +194,7 @@ export default function QuestionsStrip() {
         </div>
       )}
 
-      {expanded && count > 0 && showAll && (
+      {open && count > 0 && showAll && (
         <div className="qstrip-card">
           <div className="muted small" style={{ marginBottom: '0.4rem' }}>All {count} open questions — tap one to answer</div>
           <ul className="qstrip-list">

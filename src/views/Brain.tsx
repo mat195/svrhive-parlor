@@ -1,5 +1,6 @@
 import { useSilk } from '../SilkContext';
 import BrainRings from '../components/BrainRings';
+import BrainQueue from '../components/BrainQueue';
 
 export default function Brain() {
   const { focusNode, setFocusNode, pointedNode } = useSilk();
@@ -8,6 +9,7 @@ export default function Brain() {
   if (!focusNode) {
     return (
       <div className="stack">
+        <BrainQueue />
         <div className="eyebrow">The Brain</div>
         <p className="muted">Silk's mind, made visible. The campaign, and its infrastructure.</p>
         <div className="brainmini" style={{ height: 240 }}>

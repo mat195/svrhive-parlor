@@ -4,8 +4,7 @@ import { supabase, OWNER_EMAIL } from './lib/supabase';
 import { SilkProvider, useSilk, type Room } from './SilkContext';
 import SignIn from './components/SignIn';
 import SilkPanel from './components/SilkPanel';
-import QuestionsStrip from './components/QuestionsStrip';
-import ExtractionsCard from './components/ExtractionsCard';
+import BrainQueueBadge from './components/BrainQueueBadge';
 import PresenceBar from './components/PresenceBar';
 import Notifications from './components/Notifications';
 import DoctrineHash from './components/DoctrineHash';
@@ -113,7 +112,7 @@ function HQ() {
             <Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}<DoctrineHash />
             <button className="float-close" onClick={() => setChatOpen(false)} aria-label="Close">×</button>
           </header>
-          <div className="float-strips"><Notifications /><PresenceBar /><QuestionsStrip /><ExtractionsCard /></div>
+          <div className="float-strips"><Notifications /><PresenceBar /><BrainQueueBadge /></div>
           <SilkPanel variant="dock" />
         </aside>
       )}
