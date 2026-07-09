@@ -31,6 +31,8 @@ interface SilkCtx {
   discussDraft: (d: { id: string; target_query: string }) => void;
   clearPinnedDraft: () => void;
   draftsRev: number; // bumps when a chat revision may have changed a draft → Foundry reloads
+  chatOpen: boolean;                    // floating widget open/closed
+  setChatOpen: (v: boolean) => void;
   typing: boolean;
   setTyping: (v: boolean) => void;
   chatBusy: boolean;
@@ -39,7 +41,7 @@ interface SilkCtx {
   chatBooting: boolean;
   chats: ChatRow[];
   activeChatId: string | null;
-  sendMessage: (text: string, images?: { media_type: string; data: string }[]) => Promise<void>;
+  sendMessage: (text: string, images?: { media_type: string; data: string }[], pinnedDraftId?: string) => Promise<void>;
   newChat: () => Promise<void>;
   loadChat: (id: string) => Promise<void>;
 }
@@ -55,6 +57,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const [chatBusy, setChatBusy] = useState(false);
   const [pinnedDraft, setPinnedDraft] = useState<{ id: string; target_query: string } | null>(null);
   const [draftsRev, setDraftsRev] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chats, setChats] = useState<ChatRow[]>([]);
@@ -66,10 +69,6 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     if (n) setTimeout(() => setPointedNode((cur) => (cur === n ? null : cur)), 6500);
   }, []);
   const askSilk = useCallback((text: string) => setPrefill(text), []);
-  const discussDraft = useCallback((d: { id: string; target_query: string }) => {
-    setPinnedDraft(d);
-    setPrefill(`Let's go over the "${d.target_query}" draft — `);
-  }, []);
   const clearPinnedDraft = useCallback(() => setPinnedDraft(null), []);
   const prefillRef = useRef(prefill);
   prefillRef.current = prefill;
@@ -137,7 +136,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     return id;
   }, [activeChatId, refreshChats]);
 
-  const sendMessage = useCallback(async (text: string, images?: { media_type: string; data: string }[]) => {
+  const sendMessage = useCallback(async (text: string, images?: { media_type: string; data: string }[], pinnedDraftIdOverride?: string) => {
     const t = text.trim();
     if ((!t && !(images && images.length)) || chatBusy) return;
     const id = await ensureChat();
@@ -147,7 +146,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     setChatBusy(true);
     try {
       const { text: full } = await streamSilkChat({
-        chatId: id, message: t, images, pinnedDraftId: pinnedDraft?.id,
+        chatId: id, message: t, images, pinnedDraftId: pinnedDraftIdOverride ?? pinnedDraft?.id,
         onRefs: (refs) => setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], refs }; return c; }),
         onDelta: (d) => setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + d }; return c; }),
       });
@@ -159,6 +158,15 @@ export function SilkProvider({ children }: { children: ReactNode }) {
       setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content || `[error: ${e instanceof Error ? e.message : e}]` }; return c; });
     } finally { setChatBusy(false); scheduleDistill(id); }
   }, [chatBusy, ensureChat, pointAt, scheduleDistill, pinnedDraft]);
+
+  // Immediate-send: clicking "Discuss this draft" opens the widget AND fires the opening message
+  // right away — no text field for Mat to then send. The draft id is threaded explicitly because
+  // the pinnedDraft state hasn't flushed yet when we send.
+  const discussDraft = useCallback((d: { id: string; target_query: string }) => {
+    setPinnedDraft(d);
+    setChatOpen(true);
+    sendMessage(`Let's go over the "${d.target_query}" draft — give me a quick read, and flag anything you'd change.`, undefined, d.id);
+  }, [sendMessage]);
 
   const newChat = useCallback(async () => {
     flushDistill('navigation'); // distill the chat we're leaving
@@ -175,7 +183,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{
       room, setRoom, focusNode, setFocusNode, pointedNode, pointAt, prefill, askSilk, consumePrefill,
-      pinnedDraft, discussDraft, clearPinnedDraft, draftsRev,
+      pinnedDraft, discussDraft, clearPinnedDraft, draftsRev, chatOpen, setChatOpen,
       typing, setTyping, chatBusy,
       messages, chatBooting, chats, activeChatId, sendMessage, newChat, loadChat,
     }}>

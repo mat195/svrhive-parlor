@@ -84,7 +84,11 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
         : messages.length === 0 && <div className="silk-hint">I'm here across every room. This is one continuous conversation — it follows you everywhere and survives a browser restart. Ask me anything.</div>}
       {messages.map((m, i) => (
         <div key={i} className={`msg ${m.role}`}>
-          <div className="bubble">{m.content || (chatBusy && i === messages.length - 1 ? '…' : '')}</div>
+          <div className="bubble">{m.content
+            ? m.content
+            : (chatBusy && i === messages.length - 1
+              ? <span className="silk-thinking">Silk is thinking<i>.</i><i>.</i><i>.</i></span>
+              : '')}</div>
           {m.role === 'assistant' && m.refs && m.refs.length > 0 && (
             <div className="sources">sources: {m.refs.slice(0, 6).map((r) => r.label).join(' · ')}</div>
           )}

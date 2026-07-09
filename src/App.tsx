@@ -60,9 +60,8 @@ function RoomView({ room }: { room: Room }) {
 }
 
 function HQ() {
-  const { room, setRoom, setFocusNode } = useSilk();
+  const { room, setRoom, setFocusNode, chatOpen, setChatOpen } = useSilk();
   const [running, setRunning] = useState(false);
-  const [sheet, setSheet] = useState<'peek' | 'h66' | 'h100'>('peek');
 
   // Deep-link on mount.
   useEffect(() => {
@@ -101,21 +100,22 @@ function HQ() {
         </div>
       </main>
 
-      <aside className="silkdock">
-        <PresenceBar />
-        <QuestionsStrip />
-        <ExtractionsCard />
-        <header><Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}<DoctrineHash /></header>
-        <SilkPanel variant="dock" />
-      </aside>
+      {/* Floating Silk widget — one persistent chat, reachable from every room. */}
+      <button className={`silk-fab ${chatOpen ? 'open' : ''}`} onClick={() => setChatOpen(!chatOpen)} aria-label={chatOpen ? 'Close Silk' : 'Open Silk'} aria-expanded={chatOpen}>
+        {chatOpen ? <span className="fab-x">×</span> : <Spider size={22} className="spider" />}
+        {running && !chatOpen && <span className="fab-dot" title="battery running" />}
+      </button>
+      {chatOpen && (
+        <aside className="silkdock silk-float">
+          <header>
+            <Spider size={16} className="spider" /><strong style={{ fontFamily: 'var(--serif)' }}>Silk</strong>{presence}<DoctrineHash />
+            <button className="float-close" onClick={() => setChatOpen(false)} aria-label="Close">×</button>
+          </header>
+          <div className="float-strips"><PresenceBar /><QuestionsStrip /><ExtractionsCard /></div>
+          <SilkPanel variant="dock" />
+        </aside>
+      )}
 
-      {/* Mobile */}
-      <div className={`silksheet ${sheet}`}>
-        <div className="grip" onClick={() => setSheet(sheet === 'peek' ? 'h66' : sheet === 'h66' ? 'h100' : 'peek')}>
-          <Spider size={14} className="spider" /> Silk {running && <span className="pulse" style={{ display: 'inline-block' }} />} <span className="muted">— tap to {sheet === 'peek' ? 'open' : 'close'}</span>
-        </div>
-        {sheet !== 'peek' && <><PresenceBar /><QuestionsStrip /><ExtractionsCard /><SilkPanel variant="sheet" /></>}
-      </div>
       <nav className="mobtabs" aria-label="Rooms">
         {ROOMS.map((r) => (
           <button key={r.id} className={room === r.id ? 'active' : ''} onClick={() => setRoom(r.id)}>{r.label}</button>

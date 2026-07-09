@@ -91,7 +91,7 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .wm-records { font-size: 0.6rem; letter-spacing: 0.42em; text-transform: uppercase; color: var(--gold); font-family: var(--sans); }
 
 /* ============================ ROOM SHELL ============================ */
-.hq { display: grid; grid-template-columns: var(--rail) 1fr var(--silk-w); grid-template-rows: 100%; height: 100%; }
+.hq { display: grid; grid-template-columns: var(--rail) 1fr; grid-template-rows: 100%; height: 100%; }
 .rail { border-right: 1px solid rgba(255,255,255,0.06); padding: 1.1rem 0.7rem; display: flex; flex-direction: column; gap: 0.2rem; }
 .rail .brand { padding: 0.2rem 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem; }
 .rail .brand .spider { color: var(--gold); }
@@ -569,3 +569,33 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .revise-lead { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.8rem 0 0.35rem; }
 .pinned-draft { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.8rem; background: rgba(201,169,97,0.1); border: 1px solid rgba(201,169,97,0.32); border-radius: 8px; padding: 0.35rem 0.55rem; margin-bottom: 0.4rem; color: var(--ink); }
 .pinned-draft strong { color: var(--gold); }
+
+/* ── Floating Silk widget (Chat Redesign Stage A) — reachable from every room ─── */
+.silk-fab { position: fixed; right: 1.3rem; bottom: 1.3rem; z-index: 61; width: 58px; height: 58px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, var(--bg-3), var(--bg-1)); border: 1.5px solid var(--gold);
+  color: var(--gold); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 12px 30px -10px rgba(0,0,0,0.7); transition: transform 0.15s, box-shadow 0.15s; }
+.silk-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 38px -10px rgba(0,0,0,0.8); }
+.silk-fab.open { border-color: rgba(185,139,214,0.4); }
+.silk-fab .fab-x { font-size: 1.7rem; line-height: 1; color: var(--ink); }
+.silk-fab .fab-dot { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--gold); border: 2px solid var(--bg-1); }
+/* unread badge slot (Stage B proactive updates will populate .fab-badge) */
+.silk-fab .fab-badge { position: absolute; top: -3px; right: -3px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--ribbon, #7a3b4f); color: #fff; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-0); }
+
+/* The panel reuses .silkdock inner styling; .silk-float just makes it a floating card. */
+.silk-float { position: fixed !important; right: 1.3rem; bottom: 5.6rem; z-index: 60;
+  width: min(390px, calc(100vw - 2rem)); height: min(74vh, 660px);
+  border: 1px solid rgba(185,139,214,0.18) !important; border-radius: 14px; overflow: hidden;
+  background: var(--bg-1); box-shadow: 0 26px 60px -18px rgba(0,0,0,0.85); animation: floatIn 0.16s ease; }
+@keyframes floatIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+.silk-float header { position: relative; }
+.silk-float .float-close { margin-left: 0.4rem; background: none; border: 0; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.silk-float .float-close:hover { color: var(--ink); }
+.silk-float .float-strips { flex: 0 0 auto; }
+@media (max-width: 560px) { .silk-float { right: 0.6rem; left: 0.6rem; width: auto; bottom: 5rem; height: 72vh; } }
+
+/* "Silk is thinking…" indicator (immediate-send state) */
+.silk-thinking { color: #241019; opacity: 0.75; font-style: italic; }
+.silk-thinking i { display: inline-block; animation: thinkdot 1.2s infinite; font-style: normal; }
+.silk-thinking i:nth-child(2) { animation-delay: 0.2s; } .silk-thinking i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinkdot { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }
