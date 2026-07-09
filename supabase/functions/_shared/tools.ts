@@ -281,7 +281,8 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
       if (j?.blocked) return { ok: false, blocked: true, reason: j.error, issues: j.issues };   // provenance gate
       if (j?.stubbed) return { ok: false, stubbed: true, reason: j.error };                       // no GITHUB_TOKEN
       if (!res.ok || !j?.ok) return { error: j?.error ?? `publish failed (${res.status})` };
-      return { ok: true, live_url: j.live_url, commit_sha: j.commit_sha, note: j.note };
+      // Hand Silk the exact confirmation to relay — publish success must ALWAYS echo the real URL.
+      return { ok: true, live_url: j.live_url, commit_sha: j.commit_sha, note: j.note, tell_mat_verbatim: `Published — live at ${j.live_url}` };
     }
     if (name === 'resolve_loop') {
       const itemId = String(input.item_id ?? '').trim(), decision = String(input.decision ?? '').trim();
