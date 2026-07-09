@@ -59,7 +59,7 @@ export const platforms: Node[] = [
   { key: 'platform-facebook', label: 'Facebook', confidence: 'verified', url: 'https://www.facebook.com/luciuspthundercat' },
   { key: 'platform-soundcloud', label: 'SoundCloud', confidence: 'verified', url: 'https://soundcloud.com/lpthrilla' },
   { key: 'platform-x', label: 'X (Twitter)', confidence: 'verified', url: 'https://x.com/thrillalpt' },
-  { key: 'platform-instagram', label: 'Instagram', confidence: 'unverified', missing: true },
+  { key: 'platform-instagram', label: 'Instagram', confidence: 'verified', url: 'https://www.instagram.com/luciuspthundercat/' },
   { key: 'platform-tiktok', label: 'TikTok', confidence: 'unverified', missing: true },
   { key: 'platform-genius', label: 'Genius', confidence: 'unverified', missing: true },
 ];
