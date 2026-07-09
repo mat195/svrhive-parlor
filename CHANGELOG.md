@@ -7,6 +7,23 @@ captured in git (migrations, function deploys, DB ops, cache syncs).
 
 ## 2026-07-08 → 07-09
 
+### 🕷 Proactive Silk: daily briefing + push notifications
+Silk now contributes while Mat isn't watching — pushes updates to the floating widget, not just
+answers when poked.
+- `parlor e31ffbd` **Daily briefing** fn + cron (`daily_briefing`, 10:30 UTC / 6:30am Montréal,
+  right after `workshop_initiative`): honest 3-beat morning synthesis (what moved / what's
+  stalled / worth 5 min), pushed as a notification + journaled. Smoke-tested live.
+- `parlor e31ffbd` `silk_notifications` table (owner-RLS) + `notify()` helper (dedupe window)
+- `parlor e31ffbd` **Proactive triggers**: battery-complete (DB trigger w/ mention delta,
+  catches externally-run batteries), gate-blocked (foundry-publish), resolved-stall +
+  needs-Mat give-up (silk-executor)
+- `parlor e31ffbd` Widget: unread `fab-badge` + realtime-subscribed notifications panel
+- Infra: **cron audit** — all named jobs verified live (Question Hunter = `workshop_initiative`
+  daily, `weekly_consolidator` Sun, `catalog_label_sweep` hourly, grants Mon, etc.); dropped
+  duplicate untracked `executor_sweeper` (kept Vault-based `silk_executor_sweep`)
+- Verified already-shipped: hybrid retrieval + prompt caching (silk-chat `cache_control` +
+  journal recency×source scoring); `query_database` reads all 41 public objects (nothing walled off)
+
 ### 🔴 Trust-critical: approval → execution gap
 Approved corrections were logging to `entity_facts` but never reaching the live site.
 - `parlor 9d9da1f` Fix approval→execution gap: verify-before-done + reliability backstop

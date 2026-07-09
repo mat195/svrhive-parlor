@@ -21,12 +21,13 @@ create policy silk_notifications_owner_select on public.silk_notifications for s
 drop policy if exists silk_notifications_owner_update on public.silk_notifications;
 create policy silk_notifications_owner_update on public.silk_notifications for update to authenticated using (public.is_parlor_owner()) with check (public.is_parlor_owner());
 
--- ── Daily briefing (07:30 UTC, before Mat's morning) ─────────────────────────
+-- ── Daily briefing (10:30 UTC = 6:30am Montréal, 30min after workshop_initiative) ──
 -- A real overnight synthesis: what moved in the battery, what's stalled, what's worth Mat's
 -- 5 minutes today. Cheap (one Claude call), and the clearest proactive-contribution signal.
+-- Runs just after workshop_initiative (10:00 UTC) so it can fold in the morning's proposals.
 select cron.schedule(
   'daily_briefing',
-  '30 7 * * *',
+  '30 10 * * *',
   $$
   select net.http_post(
     url := 'https://fitpvesrrirezbndkelo.supabase.co/functions/v1/daily-briefing',
