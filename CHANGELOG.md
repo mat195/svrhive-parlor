@@ -7,6 +7,19 @@ captured in git (migrations, function deploys, DB ops, cache syncs).
 
 ## 2026-07-08 → 07-09
 
+### 🎗 Counter-Velvet Banner (Ribbon-toned real-velvet band)
+Made the real photographed velvet texture an actual visual feature — a thick full-bleed band in
+the Ribbon (#7a3b4f) counter-tone at structural page breaks, not a faint background wash.
+- `svrhive 61e1150` Recolored the real `silk-velvet-recolored-4k` scan toward Ribbon via
+  luminance-remap (preserves all fiber/weave detail) → `silk-velvet-ribbon-4k`.
+- `site 5998f4c` `VelvetBand.astro`: full-bleed 210px band, texture shown large + rich (NO
+  dimming overlay), `background-attachment: fixed` parallax, Silk-gold piping top/bottom
+  (verified edge pixel = `rgb(201,168,106)` = `--silk`), optional sparse Cream label.
+  Mobile/reduced-motion → static-cover fallback.
+- Placed at real section breaks: homepage (hero→Roster, labeled "SILK VELVET RECORDS"),
+  artist page (prose→release grid, pure texture), press kit (facts→featured, 170px).
+- Verified with a full-width render: band measures ~204px, weave/fiber catch reads as fabric.
+
 ### 🎧 Native audio player (drop the Spotify iframe)
 The public listening experience was an embedded Spotify iframe (amateur, off-brand). Replaced
 with a native player in our own design language.
