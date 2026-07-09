@@ -44,6 +44,16 @@ export const SILK_TOOLS = [
     input_schema: { type: 'object', properties: { draft_id: { type: 'string', description: 'id of the corpus draft under discussion' }, note: { type: 'string', description: 'plain-language change Mat agreed to' } }, required: ['draft_id', 'note'] },
   },
   {
+    name: 'publish_draft',
+    description: "Publish a corpus draft LIVE to silkvelvetrecords.com via the normal pipeline (foundry-publish) — runs the provenance gate first, then commits. Call this when Mat says to post/publish a pinned or named draft. Returns the live URL on success, or the gate's block reason (report it plainly, fix, retry). RED action — only on Mat's clear go-ahead; if unsure, ask the ONE blocking question, don't stall.",
+    input_schema: { type: 'object', properties: { draft_id: { type: 'string', description: 'id of the corpus draft to publish' } }, required: ['draft_id'] },
+  },
+  {
+    name: 'resolve_loop',
+    description: "Close/resolve an action_queue item you and Mat have SETTLED, so it stops re-surfacing as an open loop. Call this WHENEVER Mat confirms, approves, answers, or rejects something you filed — even in a full sentence, not just 'yes'. Journaling a confirmation does NOT close it; you MUST call this to change the real state. decision: 'approved' (execute), 'rejected' (drop), 'resolved' (answered/acknowledged, no action), 'done' (already handled).",
+    input_schema: { type: 'object', properties: { item_id: { type: 'string' }, decision: { type: 'string', description: 'approved | rejected | resolved | done' }, note: { type: 'string', description: 'the settled outcome, plain language' } }, required: ['item_id', 'decision'] },
+  },
+  {
     name: 'read_config_file',
     description: "Read the ACTUAL current contents of an allowlisted repo config/rulebook file (ground truth). Use this to VERIFY before claiming any config is 'locked'/'set' — never assert config state from memory. Allowed: scripts/prompts.json, docs/LUCIUS_ENTITY_MASTER.md, skills/SILK_IDENTITY.md, skills/<name>.md.",
     input_schema: { type: 'object', properties: { path: { type: 'string', description: 'e.g. scripts/prompts.json' } }, required: ['path'] },
@@ -259,6 +269,27 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
       const j = await res.json();
       if (!res.ok || !j?.ok) return { error: j?.error ?? `revise failed (${res.status})` };
       return { ok: true, draft_id: draftId, version: j.version, changed_summary: j.changed_summary, applied_note: note };
+    }
+    if (name === 'publish_draft') {
+      const draftId = String(input.draft_id ?? '').trim();
+      if (!draftId) return { error: 'draft_id required' };
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/foundry-publish`, {
+        method: 'POST', headers: { apikey: ANON_KEY, Authorization: `Bearer ${callerJwt}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_id: draftId }),
+      });
+      const j = await res.json();
+      if (j?.blocked) return { ok: false, blocked: true, reason: j.error, issues: j.issues };   // provenance gate
+      if (j?.stubbed) return { ok: false, stubbed: true, reason: j.error };                       // no GITHUB_TOKEN
+      if (!res.ok || !j?.ok) return { error: j?.error ?? `publish failed (${res.status})` };
+      return { ok: true, live_url: j.live_url, commit_sha: j.commit_sha, note: j.note };
+    }
+    if (name === 'resolve_loop') {
+      const itemId = String(input.item_id ?? '').trim(), decision = String(input.decision ?? '').trim();
+      if (!itemId || !['approved', 'rejected', 'resolved', 'done'].includes(decision)) return { error: 'item_id + decision (approved|rejected|resolved|done) required' };
+      const { data: qi } = await admin.from('action_queue').select('payload').eq('id', itemId).maybeSingle();
+      if (!qi) return { error: 'queue item not found' };
+      await admin.from('action_queue').update({ status: decision, payload: { ...(qi.payload as Record<string, unknown> ?? {}), decided_at: new Date().toISOString(), resolution: input.note ?? null } }).eq('id', itemId);
+      return { ok: true, item_id: itemId, status: decision };
     }
     if (name === 'read_config_file') return await readConfigFile(String(input.path ?? ''));
     if (name === 'get_action_queue_item') return await getRecord('action_queue', String(input.id ?? ''));

@@ -141,6 +141,16 @@ Deno.serve(async (req) => {
   if (body.chat_id) {
     const { data: ss } = await admin.from('silk_session_state').select('open_loops').eq('session_id', sessionId).maybeSingle();
     openLoops = (ss?.open_loops as typeof openLoops) ?? [];
+    // Self-heal (root-cause fix): a loop whose queue item is already in a terminal status must
+    // NEVER re-surface — regardless of HOW it got resolved (regex path, a resolve_loop tool
+    // call, or a manual close). This is why a confirmed/journaled answer used to keep coming
+    // back: nothing dropped it from open_loops. Now the actual queue state is the source of truth.
+    const loopIds = openLoops.map((l) => l.item_id).filter(Boolean) as string[];
+    if (loopIds.length) {
+      const { data: term } = await admin.from('action_queue').select('id').in('id', loopIds).in('status', ['approved', 'rejected', 'resolved', 'done', 'published']);
+      const closed = new Set((term ?? []).map((r) => r.id as string));
+      openLoops = openLoops.filter((l) => !l.item_id || !closed.has(l.item_id));
+    }
   }
   // Short/ambiguous replies resolve against the NEWEST open loop, then trigger its action.
   const isResolution = /^\s*(approve|approved|yes|yep|yeah|ok|okay|do it|go ahead|sure|confirm|hold|iterate|reject|no|nope|the (first|second|third|1st|2nd|3rd) one|[1-3])[.!\s]*$/i.test(message);
@@ -225,7 +235,11 @@ Deno.serve(async (req) => {
     'PROVENANCE: if your context does not contain the answer, say so plainly — do not invent. Never fabricate metrics, mentions, or facts about the artist/label.\n' +
     'CHECK, DON\'T GUESS: for any question about actual system/data state — what\'s in a table, a worker\'s checkpoint, queue items, drafts, metrics, journal, counts, "is X still true" — the query_database tool is your DEFAULT and first move. Run a SELECT before answering; if you don\'t know the table/column, discover it via information_schema, don\'t ask Mat. Only fall back to the older per-table ledger tools if they\'re a better fit. Never state a data fact you could have queried.\n' +
     'Canonical name is always "Lucius P. Thundercat", never abbreviated. Lead with the number. Be concise.\n' +
-    'AGENT LOOP: when you propose a concrete action (draft a corpus page, run an audit, apply a fix), call the queue_for_approval tool to FILE it — that pins it as the open loop so Mat\'s next "approve"/"yes" resolves against it and it executes. Do not just describe an action you could take; file it.';
+    'AGENT LOOP: when you propose a concrete action (draft a corpus page, run an audit, apply a fix), call the queue_for_approval tool to FILE it — that pins it as the open loop so Mat\'s next "approve"/"yes" resolves against it and it executes. Do not just describe an action you could take; file it.\n' +
+    'COMMAND SURFACE: this chat is Mat\'s PRIMARY way to run the campaign, not a side discussion. When he tells you what to do in plain language — "fix this", "tighten the opening", "post it", "can we publish this one", "drop that artist", "resolve that" — you DO it by calling the right tool yourself (revise_draft, publish_draft, resolve_loop, queue_for_approval), not by telling him to click a button elsewhere. If a draft is pinned, act on THAT draft.\n' +
+    'ALWAYS CONFIRM WHAT YOU DID (never a silent state change): every reply that touches state must say, in plain language — (a) what you understood the request to be, (b) what you ACTUALLY did with the real outcome (which tool, the concrete result: "revised the opening to one sentence", "published — live at <url>", "held it: the provenance gate flagged X"), and (c) what\'s next, if anything. If you could not do it, say so and why. Mat should never have to go look at a card to find out what happened.\n' +
+    'CLOSE WHAT\'S SETTLED: when Mat confirms, approves, answers, or rejects something you filed — even in a full sentence, not just "yes" — you MUST call resolve_loop on that item_id to flip its real status. Saying "confirmed" or journaling it does NOT close it; only resolve_loop stops it re-surfacing. If you don\'t know the item_id, query action_queue for the matching proposed item first.\n' +
+    'PUBLISH FROM CHAT: "can we post this?" is yours to answer. Publishing runs a provenance gate inside publish_draft — call it; if it passes it goes live and you report the URL, if it blocks you report the reason plainly. Only publish on Mat\'s clear go-ahead; if something genuinely blocks it, ask the ONE question that unblocks it — never leave him staring at a blank/empty reply.';
 
   // Prompt caching (P1-5): the STABLE prefix (L1 identity + L2 facts + L3 skills) is
   // identical across turns of a task → mark it cache_control:ephemeral so Anthropic
