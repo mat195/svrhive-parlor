@@ -39,6 +39,11 @@ export const SILK_TOOLS = [
     input_schema: { type: 'object', properties: { kind: { type: 'string', description: 'corpus-initiative | audit-initiative | metadata-fix' }, target_query: { type: 'string' }, description: { type: 'string', description: 'plain one-line: what approving does' } }, required: ['kind', 'description'] },
   },
   {
+    name: 'revise_draft',
+    description: "Apply an agreed revision to an EXISTING corpus draft via the normal revise pipeline (foundry-revise) — rewrites, versions, and lets Mat review. Use ONLY when discussing a pinned draft and Mat has agreed to a specific wording/content change; pass the draft_id under discussion and a clear plain-language note. NOT for new pages (use queue_for_approval) and NOT before Mat agrees.",
+    input_schema: { type: 'object', properties: { draft_id: { type: 'string', description: 'id of the corpus draft under discussion' }, note: { type: 'string', description: 'plain-language change Mat agreed to' } }, required: ['draft_id', 'note'] },
+  },
+  {
     name: 'read_config_file',
     description: "Read the ACTUAL current contents of an allowlisted repo config/rulebook file (ground truth). Use this to VERIFY before claiming any config is 'locked'/'set' — never assert config state from memory. Allowed: scripts/prompts.json, docs/LUCIUS_ENTITY_MASTER.md, skills/SILK_IDENTITY.md, skills/<name>.md.",
     input_schema: { type: 'object', properties: { path: { type: 'string', description: 'e.g. scripts/prompts.json' } }, required: ['path'] },
@@ -241,6 +246,19 @@ async function executeTool(name: string, input: Record<string, unknown>, callerJ
       const kind = ['corpus-initiative', 'audit-initiative', 'metadata-fix', 'catalog-audit'].includes(String(input.kind)) ? String(input.kind) : 'corpus-initiative';
       const r = await fileQueueItem({ kind, risk_tier: 'amber', payload: { title: String(input.description ?? ''), target_query: input.target_query ?? null, generated_by: 'silk-chat', description: input.description } });
       return { item_id: r.id, kind, description: input.description, filed: r.filed, deduped: !r.filed, note: r.reason };
+    }
+    if (name === 'revise_draft') {
+      const draftId = String(input.draft_id ?? '').trim(), note = String(input.note ?? '').trim();
+      if (!draftId || !note) return { error: 'draft_id and note are required' };
+      // Reuse the exact same pipeline the one-shot Revise box uses; caller's owner JWT authorizes it.
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/foundry-revise`, {
+        method: 'POST',
+        headers: { apikey: ANON_KEY, Authorization: `Bearer ${callerJwt}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_id: draftId, note }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.ok) return { error: j?.error ?? `revise failed (${res.status})` };
+      return { ok: true, draft_id: draftId, version: j.version, changed_summary: j.changed_summary, applied_note: note };
     }
     if (name === 'read_config_file') return await readConfigFile(String(input.path ?? ''));
     if (name === 'get_action_queue_item') return await getRecord('action_queue', String(input.id ?? ''));

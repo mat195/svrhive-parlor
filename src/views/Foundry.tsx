@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
+import { useSilk } from '../SilkContext';
 import DraftCard, { type Draft } from '../components/DraftCard';
 
 export default function Foundry() {
+  const { draftsRev } = useSilk();
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [query, setQuery] = useState('');
   const [gen, setGen] = useState(false);
@@ -14,7 +16,7 @@ export default function Foundry() {
     const { data } = await supabase.from('corpus_drafts').select('*').order('created_at', { ascending: false });
     setDrafts((data as Draft[]) ?? []);
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, draftsRev]);
 
   async function generate(e: React.FormEvent) {
     e.preventDefault();

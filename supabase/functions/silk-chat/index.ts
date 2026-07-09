@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'rate_limited', retry_after_s: 60 }), { status: 429, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
-  let body: { chat_id?: string; message?: string; deep?: boolean; images?: { media_type: string; data: string }[] };
+  let body: { chat_id?: string; message?: string; deep?: boolean; images?: { media_type: string; data: string }[]; pinned_draft_id?: string };
   try { body = await req.json(); } catch { return new Response('bad json', { status: 400, headers: CORS }); }
   const rawMessage = (body.message ?? '').trim();
   const hasImages = Array.isArray(body.images) && body.images.length > 0;
@@ -196,6 +196,23 @@ Deno.serve(async (req) => {
     if (evs?.length) sessionLog = `--- THIS SESSION (log — current-session truth, not memory) ---\n${evs.reverse().map((e) => `• [${e.event_type}] ${e.description}`).join('\n')}\n\n`;
   }
 
+  // Pinned draft (Workshop "Discuss this draft"): Mat is conversing about ONE specific
+  // corpus draft. Ground the whole turn in it so short replies resolve against it, and give
+  // Silk the revise_draft tool path to apply an agreed change through the normal pipeline.
+  let pinnedBlock = '';
+  if (body.pinned_draft_id) {
+    const { data: pd } = await admin.from('corpus_drafts')
+      .select('id, target_query, status, rationale, markdown_body').eq('id', body.pinned_draft_id).maybeSingle();
+    if (pd) {
+      pinnedBlock = `\n\n--- DRAFT UNDER DISCUSSION (id ${pd.id}) ---\n` +
+        `Mat opened this specific corpus draft to discuss it with you. Ground EVERY reply this turn in it; a short reply from Mat ("why?", "make it shorter", "yes") refers to THIS draft, not any other loop.\n` +
+        `Target query: "${pd.target_query}" · status: ${pd.status}\n` +
+        `Rationale for the page: ${pd.rationale ?? '—'}\n` +
+        `CURRENT DRAFT BODY:\n${String(pd.markdown_body ?? '').slice(0, 6500)}\n\n` +
+        `Talk it through conversationally — explain your phrasing, weigh alternatives, negotiate wording. When (and only when) Mat AGREES to a specific change, call the revise_draft tool with draft_id="${pd.id}" and a clear plain-language note; that applies it via the normal revise pipeline and versions it. Then tell him it's updated and to review the live preview. Keep changes scoped to what he agreed — don't rewrite the whole page for a small ask.`;
+    }
+  }
+
   // Route through the five-layer retrieval assembly (Brief Seven). ctx becomes the
   // compact L5 current-state snapshot; the builder handles L1-L4 + records the assembly.
   const built = await buildSystemPrompt({ surface: 'silk-chat', message, callId: body.chat_id, taskTypeHint: 'chat', ledgerSnapshot: ctx });
@@ -221,7 +238,7 @@ Deno.serve(async (req) => {
   const now = new Date();
   const nowBlock = `\n\n--- CURRENT TIME ---\nNow: ${now.toISOString()} (UTC). Anchor every date/time judgement to this — is X past or future, how long ago, how stale, has a scheduled time passed. Never guess the current date or time.`;
   // Resolution + open loops lead the dynamic tail (highest priority for the turn), then now/session/etc.
-  const dynamicText = resolutionBlock + openLoopsBlock + nowBlock + sessionLog + built.dynamic + operatingRules;
+  const dynamicText = pinnedBlock + resolutionBlock + openLoopsBlock + nowBlock + sessionLog + built.dynamic + operatingRules;
   const system: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
     { type: 'text', text: built.stable, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: dynamicText },

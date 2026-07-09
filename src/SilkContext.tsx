@@ -26,6 +26,11 @@ interface SilkCtx {
   prefill: string;
   askSilk: (text: string) => void;
   consumePrefill: () => string;
+  // "Discuss this draft" — a corpus draft pinned as the chat's subject (Workshop → chat).
+  pinnedDraft: { id: string; target_query: string } | null;
+  discussDraft: (d: { id: string; target_query: string }) => void;
+  clearPinnedDraft: () => void;
+  draftsRev: number; // bumps when a chat revision may have changed a draft → Foundry reloads
   typing: boolean;
   setTyping: (v: boolean) => void;
   chatBusy: boolean;
@@ -48,6 +53,8 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const [prefill, setPrefill] = useState('');
   const [typing, setTyping] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
+  const [pinnedDraft, setPinnedDraft] = useState<{ id: string; target_query: string } | null>(null);
+  const [draftsRev, setDraftsRev] = useState(0);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chats, setChats] = useState<ChatRow[]>([]);
@@ -59,6 +66,11 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     if (n) setTimeout(() => setPointedNode((cur) => (cur === n ? null : cur)), 6500);
   }, []);
   const askSilk = useCallback((text: string) => setPrefill(text), []);
+  const discussDraft = useCallback((d: { id: string; target_query: string }) => {
+    setPinnedDraft(d);
+    setPrefill(`Let's go over the "${d.target_query}" draft — `);
+  }, []);
+  const clearPinnedDraft = useCallback(() => setPinnedDraft(null), []);
   const prefillRef = useRef(prefill);
   prefillRef.current = prefill;
   const consumePrefill = useCallback(() => { const p = prefillRef.current; setPrefill(''); return p; }, []);
@@ -135,16 +147,18 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     setChatBusy(true);
     try {
       const { text: full } = await streamSilkChat({
-        chatId: id, message: t, images,
+        chatId: id, message: t, images, pinnedDraftId: pinnedDraft?.id,
         onRefs: (refs) => setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], refs }; return c; }),
         onDelta: (d) => setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + d }; return c; }),
       });
       const hit = NODE_MAP.find(([re]) => re.test(full));
       if (hit) pointAt(hit[1]);
+      // A pinned-draft turn may have applied a revise_draft — refresh the Workshop drafts.
+      if (pinnedDraft) setDraftsRev((r) => r + 1);
     } catch (e) {
       setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content || `[error: ${e instanceof Error ? e.message : e}]` }; return c; });
     } finally { setChatBusy(false); scheduleDistill(id); }
-  }, [chatBusy, ensureChat, pointAt, scheduleDistill]);
+  }, [chatBusy, ensureChat, pointAt, scheduleDistill, pinnedDraft]);
 
   const newChat = useCallback(async () => {
     flushDistill('navigation'); // distill the chat we're leaving
@@ -161,6 +175,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{
       room, setRoom, focusNode, setFocusNode, pointedNode, pointAt, prefill, askSilk, consumePrefill,
+      pinnedDraft, discussDraft, clearPinnedDraft, draftsRev,
       typing, setTyping, chatBusy,
       messages, chatBooting, chats, activeChatId, sendMessage, newChat, loadChat,
     }}>

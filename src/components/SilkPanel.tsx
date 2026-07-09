@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSilk, silkPlaceholder } from '../SilkContext';
 
 export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sheet' }) {
-  const { room, focusNode, prefill, consumePrefill, setTyping, messages, chatBusy, chatBooting, sendMessage, newChat, chats, activeChatId, loadChat } = useSilk();
+  const { room, focusNode, prefill, consumePrefill, setTyping, messages, chatBusy, chatBooting, sendMessage, newChat, chats, activeChatId, loadChat, pinnedDraft, clearPinnedDraft } = useSilk();
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [listening, setListening] = useState(false);
@@ -96,6 +96,12 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
 
   const composer = (
     <form className="composer" onSubmit={submit}>
+      {pinnedDraft && (
+        <div className="pinned-draft" title="Silk has this draft's content + rationale in context">
+          <span>💬 Discussing draft: <strong>{pinnedDraft.target_query}</strong></span>
+          <button type="button" className="attach-x" onClick={clearPinnedDraft} aria-label="Stop discussing this draft">×</button>
+        </div>
+      )}
       {images.length > 0 && (
         <div className="attach-strip">
           {images.map((im, i) => (

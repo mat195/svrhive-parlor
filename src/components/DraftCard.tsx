@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { marked } from 'marked';
+import { buildPreviewDoc } from '../lib/sitePreview';
+import { useSilk } from '../SilkContext';
 import { supabase } from '../lib/supabase';
 import { callFn } from '../lib/api';
 import { useToast } from './Toast';
@@ -44,6 +46,7 @@ function lineDiff(prev: string, curr: string): { sign: string; text: string }[] 
 
 export default function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
   const toast = useToast();
+  const { discussDraft, pinnedDraft } = useSilk();
   const [mode, setMode] = useState<'preview' | 'collaborators' | 'structure' | 'edit' | 'details'>('preview');
   const [editBody, setEditBody] = useState(stripFrontmatter(draft.markdown_body || ''));
   const [prevBody, setPrevBody] = useState<string | null>(null);
@@ -51,6 +54,9 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
   const [msg, setMsg] = useState('');
   const [reviseNote, setReviseNote] = useState('');
   const [reviseFeedback, setReviseFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [previewBody, setPreviewBody] = useState('');
+  // Debounce the live preview so the iframe doesn't reload on every keystroke.
+  useEffect(() => { const t = setTimeout(() => setPreviewBody(editBody), 250); return () => clearTimeout(t); }, [editBody]);
   const [fills, setFills] = useState<Record<string, string>>({});
   const [listening, setListening] = useState(false);
   const recogRef = useRef<any>(null);
@@ -288,9 +294,20 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
           })()}
           {mode === 'edit' && (
             <div className="editor">
-              <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={12} />
-              <div className="note-preview" dangerouslySetInnerHTML={{ __html: render(editBody) }} />
-              <button className="btn sm" disabled={busy === 'save'} onClick={saveEdit}>Save revision</button>
+              <div className="qe-split">
+                <label className="qe-pane">
+                  <span className="qe-pane-label">Markdown</span>
+                  <textarea className="qe-md" value={editBody} onChange={(e) => setEditBody(e.target.value)} spellCheck={true} />
+                </label>
+                <div className="qe-pane">
+                  <span className="qe-pane-label">Live page preview</span>
+                  <iframe className="qe-preview" title="Live rendered preview of the published page" srcDoc={buildPreviewDoc(render(previewBody))} />
+                </div>
+              </div>
+              <div className="qe-actions">
+                <button className="btn sm" disabled={busy === 'save'} onClick={saveEdit}>Save revision</button>
+                <span className="muted small">Preview uses the real page's fonts &amp; styling — this is how it'll publish.</span>
+              </div>
             </div>
           )}
           {mode === 'details' && (
@@ -305,10 +322,16 @@ export default function DraftCard({ draft, onChange }: { draft: Draft; onChange:
             </div>
           )}
 
+          <div className="revise-lead">
+            <button className="btn sm" onClick={() => discussDraft({ id: draft.id, target_query: draft.target_query })}>
+              {pinnedDraft?.id === draft.id ? '💬 Discussing in Silk chat →' : '💬 Discuss this draft with Silk →'}
+            </button>
+            <span className="muted small">Recommended for anything involving wording or judgment — talk it through, then Silk applies the change.</span>
+          </div>
           <div className="revise-row">
             <input value={reviseNote} onChange={(e) => setReviseNote(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && reviseNote.trim()) doRevise(); }}
-              placeholder="Tell Silk how to revise this — plain language…" disabled={busy === 'revise'} />
+              placeholder="…or a quick one-shot fix (a date, a name swap)" disabled={busy === 'revise'} />
             {SpeechRec && <button type="button" className={`mic-btn ${listening ? 'live' : ''}`} onClick={toggleMic} title="Dictate">{listening ? '●' : '🎙'}</button>}
             <button className="btn sm" disabled={!reviseNote.trim() || busy === 'revise'} onClick={doRevise}>{busy === 'revise' ? 'Revising…' : 'Revise'}</button>
           </div>
