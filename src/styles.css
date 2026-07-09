@@ -450,6 +450,32 @@ input, select, textarea { background: rgba(0,0,0,0.25); color: var(--ink); borde
 .silkchat-menu li button:hover { background: rgba(255,255,255,0.05); }
 .silkchat-menu li button.active { color: var(--gold); }
 
+/* Threaded conversations (Stage B): thread switcher + slide-over thread list. */
+.thread-switch { display: flex; align-items: center; gap: 0.4rem; max-width: 70%; background: none; border: none; color: var(--ink); cursor: pointer; padding: 0.15rem 0; font-size: 0.85rem; }
+.thread-switch .ts-icon { color: var(--muted); font-size: 0.85rem; }
+.thread-switch .ts-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-switch .ts-caret { color: var(--muted); font-size: 0.7rem; }
+.thread-switch:hover .ts-title { color: var(--gold); }
+.silkchat-head { position: relative; flex: none; }
+.threads-panel { position: absolute; z-index: 45; left: 0; right: 0; top: 100%; background: var(--bg-1); border-bottom: 1px solid rgba(255,255,255,0.08); box-shadow: 0 18px 40px -20px rgba(0,0,0,0.7); max-height: 22rem; overflow: auto; padding: 0.4rem 0.5rem 0.6rem; }
+.threads-head { display: flex; align-items: center; justify-content: space-between; padding: 0.2rem 0.4rem 0.4rem; font-size: 0.72rem; color: var(--muted); }
+.threads-head strong { color: var(--ink); font-size: 0.8rem; }
+.threads-list { list-style: none; margin: 0; padding: 0; }
+.threads-list li { display: flex; align-items: center; gap: 0.3rem; border-radius: 6px; }
+.threads-list li:hover { background: rgba(255,255,255,0.04); }
+.threads-list li.active { background: rgba(201,168,106,0.10); }
+.thread-open { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; background: none; border: none; color: var(--ink); text-align: left; cursor: pointer; padding: 0.4rem 0.5rem; }
+.threads-list li.active .thread-title { color: var(--gold); }
+.thread-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.83rem; }
+.thread-time { flex: 0 0 auto; font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.thread-archive { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; padding: 0 0.4rem; opacity: 0; transition: opacity 0.15s; }
+.threads-list li:hover .thread-archive { opacity: 1; }
+.thread-archive:hover { color: var(--gold); }
+.threads-empty { padding: 0.5rem; }
+.threads-archived { margin-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.3rem; }
+.threads-list.archived .thread-title { color: var(--muted); }
+.threads-list.archived .thread-time { font-style: italic; }
+
 /* Grant Opportunities (Workshop → Grants) — relevance left-border mirrors risk-cards. */
 .card.grant { position: relative; }
 .card.grant.rel-fit { border-left: 2px solid rgba(143,209,158,0.4); }

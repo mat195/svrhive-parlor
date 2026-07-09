@@ -4,7 +4,7 @@ import { streamSilkChat, callFn, type LedgerRef } from './lib/api';
 
 export type Room = 'brief' | 'ledger' | 'brain' | 'people' | 'workshop' | 'watchtower' | 'archive' | 'rules';
 export interface Msg { role: 'user' | 'assistant'; content: string; refs?: LedgerRef[] }
-export interface ChatRow { id: string; title: string | null; created_at: string }
+export interface ChatRow { id: string; title: string | null; created_at: string; archived_at?: string | null; last_message_at?: string | null }
 export interface Notif { id: string; kind: string; title: string; body: string | null; url: string | null; priority: 'normal' | 'high'; read_at: string | null; created_at: string }
 
 const ACTIVE_KEY = 'silk_active_chat';
@@ -46,11 +46,13 @@ interface SilkCtx {
   // hoisted chat (persists across ALL navigation + browser restart)
   messages: Msg[];
   chatBooting: boolean;
-  chats: ChatRow[];
+  chats: ChatRow[];            // active threads (not archived), newest activity first
+  archivedChats: ChatRow[];    // auto-archived after 24h idle
   activeChatId: string | null;
   sendMessage: (text: string, images?: { media_type: string; data: string }[], pinnedDraftId?: string) => Promise<void>;
   newChat: () => Promise<void>;
   loadChat: (id: string) => Promise<void>;
+  archiveChat: (id: string) => Promise<void>;
 }
 
 const Ctx = createContext<SilkCtx | null>(null);
@@ -69,6 +71,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chats, setChats] = useState<ChatRow[]>([]);
+  const [archivedChats, setArchivedChats] = useState<ChatRow[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [chatBooting, setChatBooting] = useState(true);
 
@@ -80,6 +83,8 @@ export function SilkProvider({ children }: { children: ReactNode }) {
   const clearPinnedDraft = useCallback(() => setPinnedDraft(null), []);
   const prefillRef = useRef(prefill);
   prefillRef.current = prefill;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const consumePrefill = useCallback(() => { const p = prefillRef.current; setPrefill(''); return p; }, []);
 
   const loadMessages = useCallback(async (cid: string) => {
@@ -88,9 +93,18 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     setMessages((data ?? []).filter((m: any) => m.role !== 'system').map((m: any) => ({ role: m.role, content: m.content, refs: m.ledger_refs })));
   }, []);
   const refreshChats = useCallback(async () => {
-    const { data } = await supabase.from('parlor_chats').select('id, title, created_at').order('created_at', { ascending: false });
-    setChats((data as ChatRow[]) ?? []);
+    const { data } = await supabase.from('parlor_chats')
+      .select('id, title, created_at, archived_at, last_message_at')
+      .order('last_message_at', { ascending: false, nullsFirst: false });
+    const rows = (data as ChatRow[]) ?? [];
+    setChats(rows.filter((c) => !c.archived_at));
+    setArchivedChats(rows.filter((c) => c.archived_at));
   }, []);
+  // Manual archive from the thread list (auto-archive runs hourly server-side too).
+  const archiveChat = useCallback(async (id: string) => {
+    await supabase.from('parlor_chats').update({ archived_at: new Date().toISOString() }).eq('id', id);
+    refreshChats();
+  }, [refreshChats]);
 
   // On mount: restore the active chat (localStorage → else latest) + its messages.
   useEffect(() => {
@@ -173,7 +187,13 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     if ((!t && !(images && images.length)) || chatBusy) return;
     const id = await ensureChat();
     const stored = t || (images && images.length ? `📎 ${images.length} image${images.length > 1 ? 's' : ''} attached` : '');
+    // Auto-name the thread from its opening message (was all "Silk chat"). First user turn only.
+    const isFirstTurn = !messagesRef.current.some((m) => m.role === 'user');
     await supabase.from('parlor_messages').insert({ chat_id: id, role: 'user', content: stored });
+    if (isFirstTurn && t) {
+      const name = t.replace(/\s+/g, ' ').trim().slice(0, 48);
+      supabase.from('parlor_chats').update({ title: name }).eq('id', id).then(() => refreshChats());
+    }
     setMessages((m) => [...m, { role: 'user', content: stored }, { role: 'assistant', content: '', refs: [] }]);
     setChatBusy(true);
     try {
@@ -189,7 +209,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setMessages((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content || `[error: ${e instanceof Error ? e.message : e}]` }; return c; });
     } finally { setChatBusy(false); scheduleDistill(id); }
-  }, [chatBusy, ensureChat, pointAt, scheduleDistill, pinnedDraft]);
+  }, [chatBusy, ensureChat, pointAt, scheduleDistill, pinnedDraft, refreshChats]);
 
   // Immediate-send: clicking "Discuss this draft" opens the widget AND fires the opening message
   // right away — no text field for Mat to then send. The draft id is threaded explicitly because
@@ -218,7 +238,7 @@ export function SilkProvider({ children }: { children: ReactNode }) {
       pinnedDraft, discussDraft, clearPinnedDraft, draftsRev, chatOpen, setChatOpen,
       notifs, unreadCount: notifs.filter((n) => !n.read_at).length, markNotifRead, markAllNotifsRead,
       typing, setTyping, chatBusy,
-      messages, chatBooting, chats, activeChatId, sendMessage, newChat, loadChat,
+      messages, chatBooting, chats, archivedChats, activeChatId, sendMessage, newChat, loadChat, archiveChat,
     }}>
       {children}
     </Ctx.Provider>

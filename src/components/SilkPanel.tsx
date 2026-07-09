@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useSilk, silkPlaceholder } from '../SilkContext';
 
 export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sheet' }) {
-  const { room, focusNode, prefill, consumePrefill, setTyping, messages, chatBusy, chatBooting, sendMessage, newChat, chats, activeChatId, loadChat, pinnedDraft, clearPinnedDraft } = useSilk();
+  const { room, focusNode, prefill, consumePrefill, setTyping, messages, chatBusy, chatBooting, sendMessage, newChat, chats, archivedChats, activeChatId, loadChat, archiveChat, pinnedDraft, clearPinnedDraft } = useSilk();
   const [input, setInput] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
+  const [showThreads, setShowThreads] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [listening, setListening] = useState(false);
   const [images, setImages] = useState<{ media_type: string; data: string; name: string }[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -56,18 +57,56 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
     await sendMessage(text, imgs);
   }
 
+  const ago = (iso?: string | null) => {
+    if (!iso) return '';
+    const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
+    if (s < 60) return 'now';
+    if (s < 3600) return `${Math.floor(s / 60)}m`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h`;
+    return `${Math.floor(s / 86400)}d`;
+  };
+  const activeThread = chats.find((c) => c.id === activeChatId) ?? archivedChats.find((c) => c.id === activeChatId);
+  const openThread = (id: string) => { loadChat(id); setShowThreads(false); };
+
   const header = (
     <div className="silkchat-bar">
-      <button className="link small" onClick={() => newChat()}>+ New chat</button>
-      {chats.length > 1 && (
-        <div className="silkchat-history">
-          <button className="link small" onClick={() => setShowHistory((s) => !s)}>history ▾</button>
-          {showHistory && (
-            <ul className="silkchat-menu">
-              {chats.slice(0, 15).map((c) => (
-                <li key={c.id}>
-                  <button className={c.id === activeChatId ? 'active' : ''} onClick={() => { loadChat(c.id); setShowHistory(false); }}>
-                    {c.title || 'Silk chat'} <span className="muted small">{String(c.created_at).slice(0, 10)}</span>
+      <button className="thread-switch" onClick={() => setShowThreads((s) => !s)} title="Switch thread" aria-expanded={showThreads}>
+        <span className="ts-icon" aria-hidden="true">☰</span>
+        <span className="ts-title">{activeThread?.title || 'Silk chat'}</span>
+        <span className="ts-caret" aria-hidden="true">▾</span>
+      </button>
+      <button className="link small" onClick={() => { newChat(); setShowThreads(false); }}>+ New</button>
+    </div>
+  );
+
+  const threadsPanel = showThreads && (
+    <div className="threads-panel">
+      <div className="threads-head">
+        <strong>Threads</strong>
+        <button className="link small" onClick={() => { newChat(); setShowThreads(false); }}>+ New thread</button>
+      </div>
+      <ul className="threads-list">
+        {chats.map((c) => (
+          <li key={c.id} className={c.id === activeChatId ? 'active' : ''}>
+            <button className="thread-open" onClick={() => openThread(c.id)}>
+              <span className="thread-title">{c.title || 'Silk chat'}</span>
+              <span className="thread-time">{ago(c.last_message_at || c.created_at)}</span>
+            </button>
+            <button className="thread-archive" title="Archive thread" aria-label="Archive thread" onClick={() => archiveChat(c.id)}>⌵</button>
+          </li>
+        ))}
+        {chats.length === 0 && <li className="threads-empty muted small">No active threads yet.</li>}
+      </ul>
+      {archivedChats.length > 0 && (
+        <div className="threads-archived">
+          <button className="link small" onClick={() => setShowArchived((s) => !s)}>Archived ({archivedChats.length}) {showArchived ? '▴' : '▾'}</button>
+          {showArchived && (
+            <ul className="threads-list archived">
+              {archivedChats.slice(0, 20).map((c) => (
+                <li key={c.id} className={c.id === activeChatId ? 'active' : ''}>
+                  <button className="thread-open" onClick={() => openThread(c.id)}>
+                    <span className="thread-title">{c.title || 'Silk chat'}</span>
+                    <span className="thread-time">archived</span>
                   </button>
                 </li>
               ))}
@@ -133,5 +172,5 @@ export default function SilkPanel({ variant: _variant }: { variant: 'dock' | 'sh
     </form>
   );
 
-  return <>{header}{body}{composer}</>;
+  return <><div className="silkchat-head">{header}{threadsPanel}</div>{body}{composer}</>;
 }
